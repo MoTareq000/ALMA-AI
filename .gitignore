@@ -1,0 +1,40 @@
+# Secrets & Local Environment
+.env
+.env.local
+*.env
+!.env.example
+
+# ALMA Express / MongoDB Backend (External Repo)
+ALMA/
+
+# Explaining / Internal Markdown Documentation
+explain.md
+DB_SCHEMA.md
+ALMA Pipeline & Architecture Review and Cost Estimate.md
+ALMA_AI_Lesson_Generation_Plan.md
+FASTAPI_BACKEND_AND_RUNTIME_GUIDE.md
+FASTAPI_ENDPOINTS_AND_MONGODB_SCHEMA_DESIGN.md
+PIPELINE_ARCHITECTURE_AND_ADAPTIVE_LEARNING.md
+
+# Scratch & Temporary Logs
+scratch/
+*.log
+
+# Python Cache & Virtual Environments
+*.egg-info/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+env/
+
+# Editor & OS Artifacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
