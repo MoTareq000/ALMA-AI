@@ -9,7 +9,8 @@ Synchronized with ALMA's StudentLessonSession MongoDB schema.
 import uuid
 from typing import Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from ..security import verify_api_key
 
 from ...storage import memory_store, student_repository, session_repository
 from ...domain import LessonContent
@@ -23,7 +24,11 @@ from ..schemas import (
     AskAlmaResponse,
 )
 
-router = APIRouter(prefix="/runtime", tags=["Student Runtime"])
+router = APIRouter(
+    prefix="/runtime",
+    tags=["Student Runtime"],
+    dependencies=[Depends(verify_api_key)]
+)
 
 
 class CompleteLessonSessionRequest(BaseModel):

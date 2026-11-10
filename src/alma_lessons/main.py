@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
+from alma_lessons.config import config
 from alma_lessons.api.routers import health, curriculum, jobs, lessons, runtime
 
 
@@ -36,10 +37,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Parse allowed origins from env (preventing "*" with allow_credentials=True)
+raw_origins = [o.strip() for o in config.allowed_origins.split(",") if o.strip()]
+if "*" in raw_origins:
+    allow_creds = False
+    cors_origins = ["*"]
+else:
+    allow_creds = True
+    cors_origins = raw_origins or ["http://localhost:3000", "http://localhost:5000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_creds,
     allow_methods=["*"],
     allow_headers=["*"],
 )

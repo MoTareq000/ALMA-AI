@@ -172,6 +172,61 @@ def test_lessons_endpoints_crud_and_runtime(mock_llm=None):
     assert resp.json()["job_id"] == test_job.job_id
 
 
+def test_api_key_auth_enforcement():
+    from alma_lessons.config import config
+    # Temporarily enforce authentication
+    orig_disabled = config.alma_auth_disabled
+    orig_keys = config.alma_api_keys
+    try:
+        config.alma_auth_disabled = False
+        config.alma_api_keys = "secret-key-1,secret-key-2"
+
+        # 1. Health endpoint requires no key
+        resp = client.get("/api/v1/health")
+        assert resp.status_code == 200
+
+        # 2. Protected endpoint without key -> 401
+        resp = client.get("/api/v1/lessons")
+        assert resp.status_code == 401
+
+        # 3. Protected endpoint with invalid key -> 401
+        resp = client.get("/api/v1/lessons", headers={"X-API-Key": "wrong-key"})
+        assert resp.status_code == 401
+
+        # 4. Protected endpoint with valid key -> 200
+        resp = client.get("/api/v1/lessons", headers={"X-API-Key": "secret-key-1"})
+        assert resp.status_code == 200
+    finally:
+        config.alma_auth_disabled = orig_disabled
+        config.alma_api_keys = orig_keys
+
+
+def test_curriculum_upload_security():
+    # 1. File without %PDF magic bytes -> 400
+    fake_pdf = b"NOT_A_REAL_PDF_CONTENT"
+    resp = client.post(
+        "/api/v1/curriculum/extract",
+        files={"file": ("fake.pdf", fake_pdf, "application/pdf")}
+    )
+    assert resp.status_code == 400
+    assert "magic bytes" in resp.json()["detail"].lower()
+
+    # 2. Oversized file exceeding MAX_UPLOAD_MB -> 413
+    from alma_lessons.config import config
+    orig_mb = config.max_upload_mb
+    try:
+        config.max_upload_mb = 1  # 1 MB
+        oversized = b"%PDF-1.4 " + (b"0" * (1024 * 1024 + 100))
+        resp = client.post(
+            "/api/v1/curriculum/extract",
+            files={"file": ("large.pdf", oversized, "application/pdf")}
+        )
+        assert resp.status_code == 413
+        assert "exceeds maximum upload size" in resp.json()["detail"]
+    finally:
+        config.max_upload_mb = orig_mb
+
+
 if __name__ == "__main__":
     print("Running test_health_endpoint...")
     test_health_endpoint()

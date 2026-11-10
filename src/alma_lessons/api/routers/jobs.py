@@ -8,11 +8,16 @@ Conforms strictly to the ALMA Express route convention:
 """
 
 from typing import List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from ...storage import job_manager
 from ..schemas import JobStatusResponse
+from ..security import verify_api_key
 
-router = APIRouter(prefix="/lesson-generations", tags=["Lesson Generations"])
+router = APIRouter(
+    prefix="/lesson-generations",
+    tags=["Lesson Generations"],
+    dependencies=[Depends(verify_api_key)]
+)
 
 
 @router.get("/job/{job_id}", response_model=JobStatusResponse)

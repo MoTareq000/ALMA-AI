@@ -5,7 +5,7 @@ All lesson-related endpoints: generate, list, view, edit, approve, reject, regen
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from datetime import datetime
 
 from ...config import config
@@ -15,6 +15,7 @@ from ...segmentation import BasicLessonSegmenter
 from ...validation import ValidationRunner
 from ...domain import LessonContent, LessonSpec
 from ..deps import get_llm_client
+from ..security import verify_api_key, rate_limiter, check_max_active_generations
 from ..schemas import (
     LessonCreateRequest,
     LessonSummaryResponse,
@@ -26,7 +27,11 @@ from ..schemas import (
     JobStatusResponse,
 )
 
-router = APIRouter(prefix="/lessons", tags=["Lessons"])
+router = APIRouter(
+    prefix="/lessons",
+    tags=["Lessons"],
+    dependencies=[Depends(verify_api_key)]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -49,12 +54,13 @@ def _run_regeneration(job_id: str, lesson_id: str, req: RegenerateLessonRequest)
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/generate", response_model=JobStatusResponse, status_code=202)
+@router.post("/generate", response_model=JobStatusResponse, status_code=202, dependencies=[Depends(rate_limiter)])
 def generate_lesson(request: LessonCreateRequest, background_tasks: BackgroundTasks):
     """
     Start generating a new lesson in the background.
     Returns a job_id you can poll with GET /api/v1/lesson-generations/job/{job_id}.
     """
+    check_max_active_generations()
     job = job_manager.create_job(
         topic=request.spec.topic,
         programming_language=request.spec.programming_language,
@@ -226,9 +232,10 @@ def reject_lesson(lesson_id: str, req: RejectLessonRequest):
     }
 
 
-@router.post("/{lesson_id}/regenerate", response_model=JobStatusResponse, status_code=202)
+@router.post("/{lesson_id}/regenerate", response_model=JobStatusResponse, status_code=202, dependencies=[Depends(rate_limiter)])
 def regenerate_lesson(lesson_id: str, req: RegenerateLessonRequest, background_tasks: BackgroundTasks):
     """Re-generate the lesson using teacher feedback notes."""
+    check_max_active_generations()
     session = memory_store.lessons.get(lesson_id)
     if not session:
         raise HTTPException(status_code=404, detail=f"Lesson '{lesson_id}' not found")
