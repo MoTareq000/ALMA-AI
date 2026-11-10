@@ -24,10 +24,10 @@ def extract_text_from_pdf(pdf_bytes: bytes, max_pages: int = 15, max_chars: int 
     extracted_pages = []
     total_pages = 0
 
-    # 1. Try PyMuPDF (fitz) - fastest and highest fidelity
+    # 1. Try PyMuPDF - fastest and highest fidelity
     try:
-        import fitz  # PyMuPDF
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        import pymupdf
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
         total_pages = len(doc)
         pages_to_read = min(total_pages, max_pages)
         for i in range(pages_to_read):

@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from pydantic import BaseModel, Field
 
@@ -15,14 +15,14 @@ class CheckpointLog(BaseModel):
     is_correct: bool
     detected_misconception: Optional[str] = None
     routed_to_remediation: bool = False
-    answered_at: datetime = Field(default_factory=datetime.utcnow)
+    answered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DialogueLog(BaseModel):
     section_order: int
     question: str
     spoken_answer: str
-    asked_at: datetime = Field(default_factory=datetime.utcnow)
+    asked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class StudentSessionRecord(BaseModel):
@@ -34,8 +34,8 @@ class StudentSessionRecord(BaseModel):
     checkpoint_logs: List[CheckpointLog] = Field(default_factory=list)
     dialogue_logs: List[DialogueLog] = Field(default_factory=list)
     status: str = Field(default="active", description="'active', 'completed', 'abandoned'")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
 
 
@@ -88,7 +88,7 @@ class MongoSessionRepository(BaseSessionRepository):
         if self.collection is None:
             return
         doc = record.model_dump()
-        doc["updated_at"] = datetime.utcnow()
+        doc["updated_at"] = datetime.now(timezone.utc)
 
         if record.student_id and ObjectId.is_valid(record.student_id):
             doc["student_id"] = ObjectId(record.student_id)
@@ -151,12 +151,12 @@ class MongoSessionRepository(BaseSessionRepository):
             is_correct=is_correct,
             detected_misconception=detected_misconception,
             routed_to_remediation=routed_to_remediation,
-            answered_at=datetime.utcnow()
+            answered_at=datetime.now(timezone.utc)
         )
         record.checkpoint_logs.append(log)
         if is_correct:
             record.current_section_order = section_order + 1
-        record.updated_at = datetime.utcnow()
+        record.updated_at = datetime.now(timezone.utc)
         self._sync_to_mongo(record)
         return record
 
@@ -175,10 +175,10 @@ class MongoSessionRepository(BaseSessionRepository):
             section_order=section_order,
             question=question,
             spoken_answer=spoken_answer,
-            asked_at=datetime.utcnow()
+            asked_at=datetime.now(timezone.utc)
         )
         record.dialogue_logs.append(log)
-        record.updated_at = datetime.utcnow()
+        record.updated_at = datetime.now(timezone.utc)
         self._sync_to_mongo(record)
         return record
 
@@ -188,8 +188,8 @@ class MongoSessionRepository(BaseSessionRepository):
             return None
 
         record.status = "completed"
-        record.completed_at = datetime.utcnow()
-        record.updated_at = datetime.utcnow()
+        record.completed_at = datetime.now(timezone.utc)
+        record.updated_at = datetime.now(timezone.utc)
         self._sync_to_mongo(record)
         return record
 
@@ -262,6 +262,6 @@ class LocalSessionRepository(BaseSessionRepository):
         if not record:
             return None
         record.status = "completed"
-        record.completed_at = datetime.utcnow()
+        record.completed_at = datetime.now(timezone.utc)
         return record
 

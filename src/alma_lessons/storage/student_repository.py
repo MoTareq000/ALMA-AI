@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 class ConceptMasteryItem(BaseModel):
@@ -29,7 +29,7 @@ class StudentProfile(BaseModel):
     current_streak: int = 0
     struggling_concepts: List[ConceptMasteryItem] = Field(default_factory=list)
     preferences: StudentPreferences = Field(default_factory=StudentPreferences)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class BaseStudentRepository:
     """Abstract interface for Student Data Access.
@@ -81,7 +81,7 @@ class LocalStudentRepository(BaseStudentRepository):
                     times_correct=1,
                     times_wrong=2,
                     last_misconception="Off-by-one: assumed range(1, 5) includes the stop number 5",
-                    last_assessed=datetime.utcnow()
+                    last_assessed=datetime.now(timezone.utc)
                 )
             ],
             preferences=StudentPreferences(
@@ -133,7 +133,7 @@ class LocalStudentRepository(BaseStudentRepository):
             student.struggling_concepts.append(item)
 
         item.times_tested += 1
-        item.last_assessed = datetime.utcnow()
+        item.last_assessed = datetime.now(timezone.utc)
         if is_correct:
             item.times_correct += 1
             student.current_streak += 1

@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 
 from .student_repository import (
@@ -52,7 +52,7 @@ class MongoStudentRepository(BaseStudentRepository):
                         "times_correct": 1,
                         "times_wrong": 2,
                         "last_misconception": "Off-by-one: assumed range(1, 5) includes the stop number 5",
-                        "last_assessed": datetime.utcnow()
+                        "last_assessed": datetime.now(timezone.utc)
                     }
                 ],
                 "preferences": {
@@ -61,7 +61,7 @@ class MongoStudentRepository(BaseStudentRepository):
                     "voice_id": "en-US-Journey-F",
                     "language": "en"
                 },
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             }
             self.collection.insert_one(mohamad_doc)
             logger.info("Seeded default student Mohamad into MongoDB 'students' collection.")
@@ -83,7 +83,7 @@ class MongoStudentRepository(BaseStudentRepository):
                     times_correct=s.get("times_correct", 0),
                     times_wrong=s.get("times_wrong", 0),
                     last_misconception=misconception,
-                    last_assessed=s.get("last_assessed") or datetime.utcnow()
+                    last_assessed=s.get("last_assessed") or datetime.now(timezone.utc)
                 ))
 
         # Parse preferences
@@ -109,7 +109,7 @@ class MongoStudentRepository(BaseStudentRepository):
             current_streak=doc.get("current_streak", 0),
             struggling_concepts=struggling_concepts,
             preferences=pref,
-            created_at=doc.get("created_at") if isinstance(doc.get("created_at"), datetime) else datetime.utcnow()
+            created_at=doc.get("created_at") if isinstance(doc.get("created_at"), datetime) else datetime.now(timezone.utc)
         )
 
     def _build_filter(self, student_id: str) -> Dict[str, Any]:
@@ -156,7 +156,7 @@ class MongoStudentRepository(BaseStudentRepository):
         if self.collection is None:
             return None
         filt = self._build_filter(student_id)
-        self.collection.update_one(filt, {"$set": {"current_streak": new_streak, "updated_at": datetime.utcnow()}})
+        self.collection.update_one(filt, {"$set": {"current_streak": new_streak, "updated_at": datetime.now(timezone.utc)}})
         return self.get_student(student_id)
 
     def record_checkpoint_result(
@@ -179,7 +179,7 @@ class MongoStudentRepository(BaseStudentRepository):
         for c in struggling_concepts:
             if c.get("concept_id") == concept_id:
                 c["times_tested"] = c.get("times_tested", 0) + 1
-                c["last_assessed"] = datetime.utcnow()
+                c["last_assessed"] = datetime.now(timezone.utc)
                 if is_correct:
                     c["times_correct"] = c.get("times_correct", 0) + 1
                 else:
@@ -199,7 +199,7 @@ class MongoStudentRepository(BaseStudentRepository):
                 "times_wrong": 0 if is_correct else 1,
                 "last_misconception": misconception if not is_correct else None,
                 "last_diagnosed_misconception": misconception if not is_correct else None,
-                "last_assessed": datetime.utcnow()
+                "last_assessed": datetime.now(timezone.utc)
             }
             struggling_concepts.append(new_item)
 
@@ -214,7 +214,7 @@ class MongoStudentRepository(BaseStudentRepository):
                     "struggling_concepts": struggling_concepts,
                     "current_streak": new_streak,
                     "longest_streak": longest_streak,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.now(timezone.utc)
                 }
             }
         )
@@ -225,5 +225,5 @@ class MongoStudentRepository(BaseStudentRepository):
         if self.collection is None:
             return None
         filt = self._build_filter(student_id)
-        self.collection.update_one(filt, {"$inc": {"lessons_completed": 1}, "$set": {"updated_at": datetime.utcnow()}})
+        self.collection.update_one(filt, {"$inc": {"lessons_completed": 1}, "$set": {"updated_at": datetime.now(timezone.utc)}})
         return self.get_student(student_id)

@@ -130,7 +130,7 @@ def _session_to_doc(session: LessonSession) -> Dict[str, Any]:
         "spec": spec_dict,
         "status_history": session.status_history,
         "created_at": session.created_at,
-        "updated_at": datetime.datetime.utcnow(),
+        "updated_at": datetime.datetime.now(datetime.timezone.utc),
     }
     return doc
 

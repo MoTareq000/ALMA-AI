@@ -1,0 +1,3 @@
+# ALMA AI Lesson Generation — Streamlit Teacher Workbench Dependencies
+-r requirements.txt
+streamlit==1.56.0

@@ -1,0 +1,4 @@
+# ALMA AI Lesson Generation — Development & Testing Dependencies
+-r requirements.txt
+pytest==9.2.0
+ruff>=0.8.0

@@ -1,6 +1,6 @@
 import uuid
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from pydantic import BaseModel, Field
 
@@ -23,7 +23,7 @@ class JobRecord(BaseModel):
     progress_percent: float = Field(default=0.0, description="0.0 to 1.0")
     step_message: str = Field(default="Generation initialized...")
     error: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -47,7 +47,7 @@ class JobManager:
             return
 
         doc = job.model_dump()
-        doc["updated_at"] = datetime.utcnow()
+        doc["updated_at"] = datetime.now(timezone.utc)
 
         # Format ObjectIds for Mongoose compatibility
         if job.course_id and ObjectId.is_valid(job.course_id):
@@ -138,7 +138,7 @@ class JobManager:
             job.current_step = "completed"
             job.progress_percent = 1.0
             job.step_message = "Lesson generation & validation completed successfully!"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             if lesson_id:
                 job.lesson_id = lesson_id
             self._sync_to_mongo(job)
@@ -150,7 +150,7 @@ class JobManager:
             job.current_step = "failed"
             job.error = error_message
             job.step_message = f"Failed: {error_message}"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             self._sync_to_mongo(job)
 
 # Global job manager instance

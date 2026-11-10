@@ -1,5 +1,5 @@
 import io
-import fitz
+import pymupdf
 from alma_lessons.domain import LessonSpec
 from alma_lessons.curriculum import (
     ExtractedCurriculum,
@@ -20,8 +20,8 @@ class MockLLMClient:
 
 
 def create_sample_pdf(title: str, text: str) -> bytes:
-    """Helper to create an in-memory single-page PDF with fitz."""
-    doc = fitz.open()
+    """Helper to create an in-memory single-page PDF with pymupdf."""
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((50, 72), f"{title}\n\n{text}")
     pdf_bytes = doc.tobytes()
