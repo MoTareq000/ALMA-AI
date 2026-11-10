@@ -1,4 +1,3 @@
-import io
 import pymupdf
 from alma_lessons.domain import LessonSpec
 from alma_lessons.curriculum import (

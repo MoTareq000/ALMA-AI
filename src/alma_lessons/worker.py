@@ -10,10 +10,9 @@ Run with:
 """
 
 import sys
-import os
 import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 from .config import config
 from .generation.tasks import (
@@ -79,7 +78,7 @@ def main():
     if config.job_backend == "rq":
         try:
             from redis import Redis
-            from rq import Worker, Queue, Connection
+            from rq import Worker, Connection
             redis_conn = Redis.from_url(config.redis_url)
             with Connection(redis_conn):
                 worker = Worker(["alma_generation"])
@@ -102,3 +101,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

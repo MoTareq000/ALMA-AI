@@ -101,7 +101,7 @@ def test_lessons_endpoints_crud_and_runtime(mock_llm=None):
     assert resp.status_code == 200
     lessons = resp.json()
     assert len(lessons) >= 1
-    assert any(l["lesson_id"] == session.lesson_id for l in lessons)
+    assert any(les["lesson_id"] == session.lesson_id for les in lessons)
 
     # 3. Test GET /api/v1/lessons/{id}
     resp = client.get(f"/api/v1/lessons/{session.lesson_id}")

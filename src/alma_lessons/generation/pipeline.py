@@ -73,7 +73,7 @@ class LessonGenerationPipeline:
                     if not sec.target_words:
                         sec.target_words = per_sec_words
                 return outline
-            except Exception as e:
+            except Exception:
                 if attempt == attempts - 1:
                     # Fallback default outline if model failed schema
                     per_sec_words = total_target_words // 3
@@ -102,7 +102,7 @@ class LessonGenerationPipeline:
                             ),
                             OutlineSection(
                                 order=3,
-                                title=f"Practical Applications, Edge Cases, and Common Pitfalls",
+                                title="Practical Applications, Edge Cases, and Common Pitfalls",
                                 purpose="Deep dive with hands-on coding demonstrations and debugging",
                                 covers_objectives=spec.learning_objectives,
                                 key_concepts=["patterns", "debugging", "best practices"],

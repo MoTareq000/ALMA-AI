@@ -77,7 +77,7 @@ class MongoStudentRepository(BaseStudentRepository):
     def _doc_to_profile(self, doc: Dict[str, Any]) -> StudentProfile:
         """Convert a Mongo document to StudentProfile model."""
         student_id = doc.get("student_id") or doc.get("student_code") or str(doc.get("_id"))
-        
+
         # Parse struggling concepts
         raw_struggles = doc.get("struggling_concepts", [])
         struggling_concepts = []

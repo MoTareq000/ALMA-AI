@@ -2,7 +2,7 @@ import json
 import datetime
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
-from ..domain import LessonSpec, LessonContent, LessonState, LessonSegmentation, validate_transition
+from ..domain import LessonSpec, LessonContent, LessonState, LessonSegmentation
 
 import hashlib
 

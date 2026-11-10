@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from ...curriculum.extractor import extract_text_from_pdf, extract_curriculum_from_pdf, ExtractedCurriculum
+from ...curriculum.extractor import extract_curriculum_from_pdf, ExtractedCurriculum
 from ...domain import LessonSpec
 from ...config import config
 from ..deps import get_llm_client

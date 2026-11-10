@@ -4,16 +4,15 @@ Lesson Generation & Management API
 All lesson-related endpoints: generate, list, view, edit, approve, reject, regenerate.
 """
 
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
-from datetime import datetime
 
 from ...config import config
 from ...storage import memory_store, job_manager
 from ...generation import LessonGenerationPipeline
 from ...segmentation import BasicLessonSegmenter
 from ...validation import ValidationRunner
-from ...domain import LessonContent, LessonSpec
+from ...domain import LessonContent
 from ..deps import get_llm_client
 from ..security import verify_api_key, rate_limiter, check_max_active_generations
 from ..schemas import (

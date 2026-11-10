@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime, timezone
 
 from ..config import config
@@ -8,7 +8,6 @@ from ..storage.mongo_client import get_mongo_db, is_mongo_connected
 from ..generation import LessonGenerationPipeline
 from ..segmentation import BasicLessonSegmenter
 from ..validation import ValidationRunner
-from ..domain import LessonSpec
 from ..api.deps import get_llm_client
 from ..api.schemas import LessonCreateRequest, RegenerateLessonRequest
 
@@ -185,3 +184,4 @@ def run_regeneration_task(job_id: str, lesson_id: str, request_dict: Dict[str, A
         logger.error(f"Regeneration task failed for job {job_id}: {e}")
         job_manager.fail_job(job_id, str(e))
         raise e
+

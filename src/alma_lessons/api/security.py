@@ -90,3 +90,4 @@ def check_max_active_generations():
             status_code=429,
             detail=f"Too many active generation jobs ({active_count}/{config.max_active_generations}). Please wait for current jobs to finish."
         )
+

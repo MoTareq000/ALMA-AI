@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 class LLMResponse(BaseModel):
     """Normalized response from any LLM provider."""

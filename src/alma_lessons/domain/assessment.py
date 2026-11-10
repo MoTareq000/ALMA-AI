@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal, Dict, Any
+from typing import List, Optional, Literal, Dict
 from pydantic import BaseModel, Field
 
 QuestionType = Literal["mcq", "fill_in_the_blank", "identify_the_error"]

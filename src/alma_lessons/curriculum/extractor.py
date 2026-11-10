@@ -77,7 +77,7 @@ def extract_curriculum_from_pdf(pdf_bytes: bytes, llm_client) -> ExtractedCurric
     )
 
     data = response.parsed_json or {}
-    
+
     # Clean and guarantee valid list formats
     objectives = data.get("learning_objectives", [])
     if isinstance(objectives, str):

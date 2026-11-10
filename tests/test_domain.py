@@ -6,9 +6,6 @@ from alma_lessons.domain import (
     Section,
     LessonState,
     validate_transition,
-    Segment,
-    LessonSegmentation,
-    TopicSegmentation,
 )
 
 def test_lesson_spec_creation():

@@ -1,7 +1,6 @@
 from typing import Optional
 from ..config import config
 from ..llm import BaseLLMClient, GoogleGeminiLLMClient, GroqLLMClient, OpenRouterLLMClient, FakeLLMClient
-from ..storage import memory_store, student_repository, job_manager
 
 def get_llm_client(provider: Optional[str] = "gemini", model: Optional[str] = None) -> BaseLLMClient:
     """Factory dependency to instantiate appropriate LLM client based on requested provider."""

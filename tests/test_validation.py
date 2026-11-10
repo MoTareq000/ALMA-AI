@@ -1,7 +1,6 @@
 # Tests for validation models
 from alma_lessons.domain import LessonSpec, LessonContent, Section, Block
 from alma_lessons.validation import SchemaValidator, StructureValidator, ValidationRunner
-from alma_lessons.llm import FakeLLMClient
 
 def test_schema_validator_valid():
     validator = SchemaValidator()

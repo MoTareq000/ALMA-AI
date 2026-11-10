@@ -7,7 +7,6 @@ Synchronized with ALMA's StudentLessonSession MongoDB schema.
 """
 
 import uuid
-from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
 from ..security import verify_api_key

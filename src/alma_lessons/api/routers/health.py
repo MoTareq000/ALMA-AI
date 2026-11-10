@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from ...config import config
-from ...storage import memory_store, student_repository, job_manager
+from ...storage import memory_store, student_repository
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
