@@ -9,9 +9,8 @@ if str(src_dir) not in sys.path:
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-import json
 import streamlit as st
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
 from alma_lessons.domain import (
     LessonSpec,
@@ -19,19 +18,18 @@ from alma_lessons.domain import (
     Section,
     Block,
     LessonState,
-    validate_transition,
     LessonSegmentation,
-    SegmentAssessment,
-    PuzzleChallenge,
-    CodingExercise,
+    Outline,
+    OutlineSection,
 )
 from alma_lessons.llm import GroqLLMClient, OpenRouterLLMClient, GoogleGeminiLLMClient
 from alma_lessons.generation import LessonGenerationPipeline
 from alma_lessons.validation import ValidationRunner
 from alma_lessons.segmentation import BasicLessonSegmenter
-from alma_lessons.storage import memory_store, LessonSession, LessonVersionRecord, student_repository
+from alma_lessons.storage import memory_store, LessonSession, student_repository
 from alma_lessons.api.client import AlmaApiClient
 from alma_lessons.config import config
+from alma_lessons.tts import audio_cache, GoogleCloudTTSClient, FakeTTSClient
 
 api_client = AlmaApiClient(base_url="http://127.0.0.1:8000/api/v1")
 
@@ -74,7 +72,7 @@ st.markdown("""
     .badge-revision { background-color: rgba(239, 68, 68, 0.2); color: #EF4444 !important; border: 1px solid #EF4444; }
     .badge-draft { background-color: rgba(156, 163, 175, 0.2); color: #9CA3AF !important; border: 1px solid #9CA3AF; }
     .badge-validating { background-color: rgba(99, 102, 241, 0.2); color: #818CF8 !important; border: 1px solid #818CF8; }
-    
+
     .callout-box {
         padding: 0.9rem 1.2rem;
         border-radius: 8px;
@@ -85,17 +83,17 @@ st.markdown("""
     .callout-box * {
         color: var(--text-color, inherit) !important;
     }
-    .callout-tip { 
-        background-color: rgba(16, 185, 129, 0.14) !important; 
-        border-color: #10B981 !important; 
+    .callout-tip {
+        background-color: rgba(16, 185, 129, 0.14) !important;
+        border-color: #10B981 !important;
     }
-    .callout-warning { 
-        background-color: rgba(245, 158, 11, 0.14) !important; 
-        border-color: #F59E0B !important; 
+    .callout-warning {
+        background-color: rgba(245, 158, 11, 0.14) !important;
+        border-color: #F59E0B !important;
     }
-    .callout-note { 
-        background-color: rgba(59, 130, 246, 0.14) !important; 
-        border-color: #3B82F6 !important; 
+    .callout-note {
+        background-color: rgba(59, 130, 246, 0.14) !important;
+        border-color: #3B82F6 !important;
     }
 
     .segment-card {
@@ -262,6 +260,30 @@ with st.sidebar:
         api_key = st.text_input("OpenRouter API Key", value=config.openrouter_api_key, type="password")
         generator_model = st.text_input("Generator Model ID", value="meta-llama/llama-3.3-70b-instruct")
         client = OpenRouterLLMClient(api_key=api_key, default_model=generator_model)
+
+    st.divider()
+    st.subheader("🎙️ Voice Settings (Google TTS)")
+    voice_options = [
+        "en-US-Journey-F",
+        "en-US-Journey-D",
+        "en-US-Neural2-F",
+        "en-US-Neural2-D",
+    ]
+    chosen_voice = st.selectbox("Teacher Voice Profile", voice_options, index=0, help="Journey voices provide natural, conversational tutoring intonation.")
+    voice_rate = st.slider("Speech Rate (Speed)", min_value=0.8, max_value=1.2, value=1.0, step=0.05)
+    use_mock_tts = st.checkbox("🧪 Offline Mock Voice (0 Cost / Fast Test)", value=False, help="Uses local synthesized test audio to test UI without calling Google Cloud API.")
+
+    with st.expander("🔊 Test Teacher Voice", expanded=False):
+        test_phrase = st.text_input("Sample text:", value="Welcome to ALMA Academy! Today we will master Python loops step by step.")
+        if st.button("Play Voice Sample"):
+            with st.spinner("Synthesizing voice sample..."):
+                try:
+                    tts_c = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                    sample_bytes = tts_c.synthesize(text=test_phrase, voice_name=chosen_voice, speaking_rate=voice_rate)
+                    st.audio(sample_bytes, format="audio/mp3")
+                    st.success("Sample synthesized successfully!")
+                except Exception as tts_err:
+                    st.error(f"TTS Error: {tts_err}")
 
 
     st.divider()
@@ -976,6 +998,47 @@ with tab_segments:
             m_col2.metric("Total Narration Segments", seg_data.total_segments)
             m_col3.metric("Est. Total Duration", f"{seg_data.est_total_duration_minutes} min")
 
+            # Voice Synthesizer Control Bar
+            st.markdown("""
+            <div style="background-color: rgba(59, 130, 246, 0.08); border: 1px solid #3B82F6; border-radius: 8px; padding: 0.8rem 1.0rem; margin-top: 0.8rem; margin-bottom: 0.8rem;">
+                <span style="font-weight: 700; color: #3B82F6;">🎙️ Google Cloud Journey Speech Studio</span><br>
+                <span style="font-size: 0.85rem; opacity: 0.9;">Synthesize human-grade teacher narration for every approved segment. Audio is cached locally to eliminate duplicate synthesis costs.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            col_tts1, col_tts2 = st.columns([1.8, 1.2])
+            with col_tts1:
+                st.caption(f"Active Voice: **{chosen_voice}** | Engine: **{'Offline Mock' if use_mock_tts else 'Google Cloud Journey'}** | Speed: **{voice_rate}x**")
+            with col_tts2:
+                if st.button("⚡ Synthesize All Segment Audio", type="primary", use_container_width=True):
+                    tts_client = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                    all_segs = [s for t in seg_data.topics for s in t.segments]
+                    synth_n = 0
+                    cached_n = 0
+                    p_bar = st.progress(0.0)
+                    for idx, s in enumerate(all_segs):
+                        s_text = s.narration_text.strip()
+                        if not s_text:
+                            continue
+                        c_key = audio_cache.compute_cache_key(s_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+                        if audio_cache.has_audio(c_key):
+                            cached_n += 1
+                        else:
+                            try:
+                                a_bytes = tts_client.synthesize(s_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+                                audio_cache.save_audio(c_key, a_bytes)
+                                synth_n += 1
+                            except Exception as err:
+                                st.error(f"Failed to synthesize segment #{s.order_in_lesson}: {err}")
+                                break
+                        s.audio_file = f"{c_key}.mp3"
+                        s.audio_url = f"/api/v1/audio/{c_key}.mp3"
+                        p_bar.progress((idx + 1) / max(len(all_segs), 1))
+                    if hasattr(memory_store, "_persist"):
+                        memory_store._persist(current_session)
+                    st.success(f"🎉 Speech ready! {synth_n} newly synthesized, {cached_n} loaded from zero-cost cache.")
+                    st.rerun()
+
             st.divider()
 
             for topic in seg_data.topics:
@@ -1011,14 +1074,38 @@ with tab_segments:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        with st.expander(f"🎭 Audio Stitching Runtime Simulation (e.g. Student 'Ahmed')", expanded=False):
+                        # Teacher Audio Preview Player
+                        c_key = audio_cache.compute_cache_key(seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+                        cached_audio = audio_cache.get_audio_path(c_key)
+                        if cached_audio and cached_audio.is_file():
+                            st.markdown("🔊 **Synthesized Teacher Voice (Google Journey):**")
+                            st.audio(str(cached_audio), format="audio/mp3")
+                        else:
+                            c_a1, c_a2 = st.columns([2.5, 1])
+                            with c_a1:
+                                st.caption("Audio not synthesized yet for this segment.")
+                            with c_a2:
+                                if st.button(f"🔊 Synthesize Voice #{seg.order_in_lesson}", key=f"btn_seg_{seg.order_in_lesson}"):
+                                    tts_client = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                                    try:
+                                        a_bytes = tts_client.synthesize(seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+                                        audio_cache.save_audio(c_key, a_bytes)
+                                        seg.audio_file = f"{c_key}.mp3"
+                                        seg.audio_url = f"/api/v1/audio/{c_key}.mp3"
+                                        if hasattr(memory_store, "_persist"):
+                                            memory_store._persist(current_session)
+                                        st.rerun()
+                                    except Exception as err:
+                                        st.error(f"Synthesis failed: {err}")
+
+                        with st.expander("🎭 Audio Stitching Runtime Simulation (e.g. Student 'Ahmed')", expanded=False):
                             p_sim = "Hey Ahmed! Great streak on Python loops. " if seg.order_in_lesson == 1 else "Spot on with that last checkpoint, Ahmed! "
                             s_sim = " Let's test your understanding on this concept, Ahmed:" if seg.assessment else " Now let's see how this ties into the next concept."
                             st.markdown(f"""
                             - 🟣 **1. Dynamic Prefix Audio (~1.5s TTS):** *"{p_sim}"*
                             - 🟢 **2. Pre-Rendered Core Audio (Cached MP3):** *"{seg.narration_text}"*
                             - 🟣 **3. Dynamic Suffix Audio (~1.5s TTS):** *"{s_sim}"*
-                            
+
                             💡 **Player Execution:** The mobile/web audio player queues `[Prefix (dynamic)] + [Core (CDN cached)] + [Suffix (dynamic)]`. Zero runtime modification of teacher's approved teaching prose!
                             """)
 
@@ -1030,7 +1117,7 @@ with tab_segments:
                         if seg.assessment:
                             q = seg.assessment
                             type_label = "MCQ" if q.question_type == "mcq" else ("Fill-in-the-Blank" if q.question_type == "fill_in_the_blank" else "Identify the Bug")
-                            
+
                             st.markdown(f"""
                             <div class="micro-check-card">
                                 <div class="tts-badge">🎙️ <b>TTS Spoken Question:</b> "{q.spoken_tts_prompt}"</div><br>
@@ -1106,7 +1193,7 @@ with tab_practice:
                     puzzle_label = p.puzzle_type.replace('_', ' ').title()
                     st.markdown(f"""
                     <div class="segment-card" style="border-left: 5px solid #8B5CF6;">
-                        <span style="font-size: 1.1rem; font-weight: 700; color: var(--text-color, inherit);">Puzzle #{idx+1}: {p.title}</span> 
+                        <span style="font-size: 1.1rem; font-weight: 700; color: var(--text-color, inherit);">Puzzle #{idx+1}: {p.title}</span>
                         <span class="badge" style="background-color: rgba(139, 92, 246, 0.2); color: #8B5CF6; border: 1px solid #8B5CF6;">{puzzle_label}</span><br>
                         <p style="margin-top: 0.5rem; color: var(--text-color, inherit);">{p.description}</p>
                     </div>
@@ -1122,7 +1209,7 @@ with tab_practice:
                         st.code(p.code_snippet, language=lesson_data.programming_language.lower())
 
                     with st.expander(f"🔍 Reveal Solution & Step-by-Step Walkthrough (Puzzle #{idx+1})"):
-                        st.markdown(f"**Target Answer / Correct Order:**")
+                        st.markdown("**Target Answer / Correct Order:**")
                         st.code(p.correct_order_or_answer, language=lesson_data.programming_language.lower())
                         st.markdown(f"**Step-by-Step Logic Walkthrough:** {p.explanation}")
                 st.write("")
@@ -1137,7 +1224,7 @@ with tab_practice:
                     diff_color = "#10B981" if ex.difficulty == "easy" else ("#F59E0B" if ex.difficulty == "medium" else "#EF4444")
                     st.markdown(f"""
                     <div class="segment-card" style="border-left: 5px solid {diff_color};">
-                        <span style="font-size: 1.15rem; font-weight: 700; color: var(--text-color, inherit);">Exercise #{idx+1}: {ex.title}</span> 
+                        <span style="font-size: 1.15rem; font-weight: 700; color: var(--text-color, inherit);">Exercise #{idx+1}: {ex.title}</span>
                         <span class="badge" style="background-color: {diff_color}22; color: {diff_color}; border: 1px solid {diff_color};">{ex.difficulty.upper()}</span><br>
                         <p style="margin-top: 0.6rem; font-size: 0.98rem; color: var(--text-color, inherit); line-height: 1.5;">{ex.task_description}</p>
                     </div>
@@ -1157,143 +1244,231 @@ with tab_practice:
                 st.write("")
 
 # ----------------------------------------------------
-# TAB 6: STUDENT ADAPTIVE RUNTIME SIMULATION (Student: Mohamad)
+# TAB 6: STUDENT INTERACTIVE LEARNING PLAYER
 # ----------------------------------------------------
 with tab_runtime:
-    st.header("Step 6: Student Adaptive Runtime Simulation")
+    st.header("Step 6: Student Interactive Learning Player")
     st.markdown("""
-    Experience how the ALMA player personalizes the lesson in real time for an individual student.
-    Uses pre-configured local default data for student **Mohamad**, with seamless readiness to connect to MongoDB in production.
+    Experience how a student attends an interactive, audio-narrated lesson in ALMA.
+    Features synchronized teacher voice playback, live slide progression, formative checkpoints, and an inline **Ask ALMA** AI tutor.
     """)
 
-    # 1. Student Profile Card
-    mohamad = student_repository.get_default_student()
+    # 1. Student Profile Selector & Overview
+    all_students = student_repository.list_students()
+    if not all_students:
+        mohamad_default = student_repository.get_default_student()
+        all_students = [mohamad_default] if mohamad_default else []
+
+    s_options = {s.student_id: f"{s.first_name} {s.last_name} ({s.grade_level})" for s in all_students}
+    col_stu1, col_stu2 = st.columns([1.5, 2.5])
+    with col_stu1:
+        selected_stu_id = st.selectbox(
+            "Select Student Profile",
+            options=list(s_options.keys()),
+            format_func=lambda x: s_options[x],
+            index=0
+        )
+    active_student = student_repository.get_student(selected_stu_id) or all_students[0]
+
     s_col1, s_col2, s_col3 = st.columns([1.5, 1.2, 1.3])
     with s_col1:
         st.markdown(f"""
         <div class="segment-card" style="border-left: 5px solid #3B82F6;">
-            <span style="font-size: 1.15rem; font-weight: 700;">👤 Student: {mohamad.first_name} {mohamad.last_name}</span><br>
-            <span style="font-size: 0.85rem; opacity: 0.85;">🏫 {mohamad.school_name} | <b>{mohamad.grade_level}</b></span><br>
-            <span style="font-size: 0.85rem; opacity: 0.85;">🆔 Code: <code>{mohamad.student_code}</code></span>
+            <span style="font-size: 1.15rem; font-weight: 700;">👤 Student: {active_student.first_name} {active_student.last_name}</span><br>
+            <span style="font-size: 0.85rem; opacity: 0.85;">🏫 {active_student.school_name or 'ALMA Academy'} | <b>{active_student.grade_level}</b></span><br>
+            <span style="font-size: 0.85rem; opacity: 0.85;">🆔 Code: <code>{active_student.student_code}</code></span>
         </div>
         """, unsafe_allow_html=True)
     with s_col2:
-        st.metric("Lessons Completed", mohamad.lessons_completed)
-        st.metric("Current Learning Streak", f"{mohamad.current_streak} 🔥")
+        st.metric("Lessons Completed", active_student.lessons_completed)
+        st.metric("Learning Streak", f"{active_student.current_streak} 🔥")
     with s_col3:
         st.markdown("**⚙️ Learning Preferences:**")
-        st.write(f"- Pacing: `{mohamad.preferences.pacing.title()}`")
-        st.write(f"- Tone: `{mohamad.preferences.tone.title()}`")
-        st.write(f"- Voice: `{mohamad.preferences.voice_id}`")
+        st.write(f"- Pacing: `{active_student.preferences.pacing.title()}`")
+        st.write(f"- Tone: `{active_student.preferences.tone.title()}`")
+        st.write(f"- Voice: `{chosen_voice}`")
 
-    if mohamad.struggling_concepts:
+    if active_student.struggling_concepts:
         st.markdown("##### ⚠️ Diagnosed Conceptual Struggles in Student History")
-        for sc in mohamad.struggling_concepts:
+        for sc in active_student.struggling_concepts:
             st.warning(f"**Concept:** `{sc.concept_label}` ({sc.concept_id})\n\n↳ **Past Error:** {sc.last_misconception} (Tested: {sc.times_tested}x, Incorrect: {sc.times_wrong}x)")
 
     st.divider()
 
-    # 2. Interactive Playback Session
+    # 2. Interactive Audio-Narrated Lesson Player
     current_session: Optional[LessonSession] = None
     if st.session_state.selected_lesson_id:
         current_session = memory_store.lessons.get(st.session_state.selected_lesson_id)
 
     if not current_session:
-        st.info("Select or generate a lesson first in Step 1 to run the student simulation.")
+        st.info("Select or generate a lesson first in Step 1 to launch the student interactive player.")
     else:
         curr_v = current_session.current_version
         lesson_data = curr_v.content
+        seg_data = curr_v.segmentation
 
-        st.subheader("🎧 Personalized Audio Playback Simulator")
-        st.caption("Demonstrates how the mobile / web player assembles the speech queue:")
+        if not seg_data or not seg_data.topics:
+            st.warning("This lesson has not been segmented yet. Go to **Tab 4 (Narration & Micro-Checks)** and click 'Segment Current Version' first!")
+        else:
+            all_slides = [s for t in seg_data.topics for s in t.segments]
+            total_slides = len(all_slides)
 
-        if st.button("▶️ Start Adaptive Playback Session for Mohamad", type="primary"):
-            st.session_state.runtime_session_started = True
+            # Initialize slide index
+            if "student_slide_idx" not in st.session_state:
+                st.session_state.student_slide_idx = 0
 
-        if st.session_state.get("runtime_session_started"):
-            # Synthesize opening wrapper
-            struggles = [s.concept_label for s in mohamad.struggling_concepts if s.times_wrong >= 2]
-            p_text = f"Hey {mohamad.first_name}! "
-            if mohamad.current_streak >= 3:
-                p_text += f"Awesome job on your {mohamad.current_streak}-lesson streak. "
-            if struggles:
-                p_text += f"Remember last time you worked with {struggles[0]}? Today's lesson on {lesson_data.title} builds right on that."
+            # Clamp index
+            slide_idx = max(0, min(st.session_state.student_slide_idx, total_slides - 1))
+            current_seg = all_slides[slide_idx]
 
+            # Header & Progress
+            st.subheader(f"🎧 Slide {slide_idx + 1} of {total_slides}: {current_seg.title}")
+            st.progress((slide_idx + 1) / total_slides)
+
+            # 1. Slide 1 Dynamic Greeting Card
+            if slide_idx == 0:
+                p_text = f"Hey {active_student.first_name}! "
+                if active_student.current_streak >= 3:
+                    p_text += f"Awesome to see your {active_student.current_streak}-lesson streak going strong! "
+                p_text += f"Today we're diving into {lesson_data.title} in {lesson_data.programming_language}. Let's get started!"
+
+                st.markdown(f"""
+                <div style="background-color: rgba(59, 130, 246, 0.08); border: 1px solid #3B82F6; border-radius: 10px; padding: 1.0rem 1.2rem; margin-bottom: 1.2rem;">
+                    <span style="font-size: 0.82rem; font-weight: 700; color: #3B82F6; text-transform: uppercase;">🎙️ Personalized Dynamic Welcome</span><br>
+                    <span style="font-size: 1.02rem; font-style: italic; color: var(--text-color, inherit);">"{p_text}"</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # 2. Audio Player for Current Segment
+            c_key = audio_cache.compute_cache_key(current_seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+            audio_path = audio_cache.get_audio_path(c_key)
+
+            col_audio1, col_audio2 = st.columns([2.5, 1.2])
+            with col_audio1:
+                if audio_path and audio_path.is_file():
+                    st.markdown("🔊 **Teacher Narration Audio:**")
+                    st.audio(str(audio_path), format="audio/mp3")
+                else:
+                    st.caption("Audio not yet synthesized for this segment.")
+            with col_audio2:
+                if not (audio_path and audio_path.is_file()):
+                    if st.button("⚡ Synthesize This Slide Audio", type="primary"):
+                        tts_client = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                        try:
+                            a_bytes = tts_client.synthesize(current_seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+                            audio_cache.save_audio(c_key, a_bytes)
+                            current_seg.audio_file = f"{c_key}.mp3"
+                            current_seg.audio_url = f"/api/v1/audio/{c_key}.mp3"
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"TTS Error: {e}")
+
+            # 3. Main Slide Instructional Card
             st.markdown(f"""
-            <div style="background-color: rgba(59, 130, 246, 0.08); border: 1px solid #3B82F6; border-radius: 10px; padding: 1.2rem; margin: 1rem 0;">
-                <div class="tts-badge">🎙️ <b>Personalized Dynamic Opening (Synthesized ~1.5s TTS):</b></div><br>
-                <span style="font-size: 1.05rem; font-style: italic; color: var(--text-color, inherit);">"{p_text}"</span>
+            <div class="segment-card" style="margin-top: 0.8rem; padding: 1.4rem;">
+                <span style="font-size: 0.82rem; font-weight: 700; color: #10B981; text-transform: uppercase;">📖 Teaching Content:</span><br>
+                <p style="font-size: 1.10rem; line-height: 1.6; margin-top: 0.5rem; color: var(--text-color, inherit);">
+                    {current_seg.narration_text}
+                </p>
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("""
-            **📱 Client Audio Player Assembly Queue:**
-            1. 🟣 **Personalized Dynamic Wrapper:** `[Generated on-the-fly for Mohamad (~15 words)]`
-            2. 🟢 **Frozen Core Instructional Audio:** `[Pre-rendered & Cached on CDN: 100% Teacher-Approved]`
-            3. 🟣 **Active-Recall Checkpoint Lead-In:** `[Dynamic prompt wrapper]`
-            """)
+            # Attached Code Display
+            if current_seg.attached_code:
+                st.markdown(f"**💻 Code Demonstration ({current_seg.attached_code_language or lesson_data.programming_language}):**")
+                st.code(current_seg.attached_code, language=(current_seg.attached_code_language or lesson_data.programming_language).lower())
 
-            st.divider()
+            # 4. Formative Checkpoint on this Slide
+            if current_seg.assessment:
+                q = current_seg.assessment
+                st.markdown(f"""
+                <div class="micro-check-card" style="margin-top: 1.2rem;">
+                    <div class="tts-badge">🎯 <b>Quick Knowledge Check:</b> "{q.spoken_tts_prompt or q.question_text}"</div><br>
+                    <span style="font-weight: 700; font-size: 1.0rem; color: var(--text-color, inherit);">{q.question_text}</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-            # 3. Formative Checkpoint Interaction (Section 1)
-            sec_with_diag = next((s for s in lesson_data.sections if s.diagnostic_check), None)
-            if sec_with_diag and sec_with_diag.diagnostic_check:
-                diag = sec_with_diag.diagnostic_check
-                st.subheader(f"🎯 Formative Checkpoint: Section {sec_with_diag.order} ({sec_with_diag.title})")
-                st.markdown(f"**Question:** {diag.question_text}")
-                if diag.code_snippet:
-                    st.code(diag.code_snippet, language=lesson_data.programming_language.lower())
+                if q.code_snippet:
+                    st.code(q.code_snippet, language=lesson_data.programming_language.lower())
 
-                student_choice = st.radio(
-                    "Select Mohamad's Answer (Test how the adaptive engine handles right vs wrong options):",
-                    options=diag.options,
-                    key="sim_student_choice"
-                )
-
-                if st.button("Submit Answer as Mohamad"):
-                    is_corr = (student_choice.strip().lower() == diag.correct_answer.strip().lower())
-                    misconc = diag.misconception_map.get(student_choice.strip()) if diag.misconception_map else None
-
-                    # Update student repo
-                    student_repository.record_checkpoint_result(
-                        student_id=mohamad.student_id,
-                        concept_id=diag.concept_tag or f"section_{sec_with_diag.order}",
-                        concept_label=sec_with_diag.title,
-                        is_correct=is_corr,
-                        misconception=misconc
+                if q.options:
+                    ans_choice = st.radio(
+                        "Select your answer:",
+                        q.options,
+                        key=f"student_ans_{slide_idx}_{current_session.lesson_id}"
                     )
-
-                    if is_corr:
-                        st.success(f"🎉 **Correct, Mohamad!** {diag.explanation}\n\n🔥 **Streak updated to {mohamad.current_streak}!**")
-                    else:
-                        st.error(f"❌ **Not quite, Mohamad.** Correct answer: **{diag.correct_answer}**")
-                        if misconc:
-                            st.warning(f"🔍 **Misconception Diagnosed:** *{misconc}*")
-
-                        st.markdown("##### 🔄 Dynamically Routing Mohamad to Remediation Branch:")
-                        if sec_with_diag.remediation_blocks:
-                            for rb in sec_with_diag.remediation_blocks:
-                                if rb.type == "paragraph":
-                                    st.info(f"💡 {rb.text}")
-                                elif rb.type == "code":
-                                    st.code(rb.code, language=lesson_data.programming_language.lower())
+                    if st.button("Submit Answer", key=f"btn_sub_{slide_idx}"):
+                        is_correct = (ans_choice.strip().lower() == q.correct_answer.strip().lower())
+                        student_repository.record_checkpoint_result(
+                            student_id=active_student.student_id,
+                            concept_id=f"seg_{current_seg.order_in_lesson}",
+                            concept_label=current_seg.title,
+                            is_correct=is_correct,
+                        )
+                        if is_correct:
+                            st.success(f"🎉 **Correct, {active_student.first_name}!** {q.explanation}")
                         else:
-                            st.info(f"💡 {diag.explanation}")
+                            st.error(f"❌ **Not quite, {active_student.first_name}.** Correct answer: **{q.correct_answer}**\n\n💡 *Explanation:* {q.explanation}")
+
+            # 5. Interactive "Ask ALMA" AI Tutor
+            with st.expander("🤖 Have a question about this slide? Ask ALMA Tutor!", expanded=False):
+                st.caption(f"ALMA is available 24/7 to answer questions strictly grounded in '{current_seg.title}':")
+                stu_question = st.text_input("Type your question:", placeholder="e.g. Can you explain what this line of code does?", key=f"q_input_{slide_idx}")
+                if st.button("Send to ALMA", key=f"btn_ask_{slide_idx}"):
+                    if stu_question.strip():
+                        with st.spinner("ALMA is formulating explanation..."):
+                            try:
+                                tutor_prompt = (
+                                    f"You are ALMA, an encouraging, friendly computer science tutor for a {active_student.grade_level} student named {active_student.first_name}.\n"
+                                    f"Current Lesson Topic: {lesson_data.title}\n"
+                                    f"Current Slide Title: {current_seg.title}\n"
+                                    f"Slide Explanation: {current_seg.narration_text}\n"
+                                    f"Code on Slide: {current_seg.attached_code or 'None'}\n\n"
+                                    f"Student Question: {stu_question}\n\n"
+                                    f"Provide a concise, encouraging, pedagogically sound answer (2-4 sentences) that directly clarifies their question."
+                                )
+                                tutor_resp = client.generate(prompt=tutor_prompt, json_mode=False, temperature=0.3)
+                                answer_text = tutor_resp.content.strip()
+                                st.markdown(f"""
+                                <div class="callout-box callout-note">
+                                    <b>🎓 ALMA Tutor:</b> {answer_text}
+                                </div>
+                                """, unsafe_allow_html=True)
+                            except Exception as ask_err:
+                                st.error(f"Failed to get answer: {ask_err}")
 
             st.divider()
 
-            # 4. Ask ALMA Voice/Text Tutor
-            st.subheader("🤖 Ask ALMA (Contextual Tutor for Mohamad)")
-            st.caption(f"Mohamad can ask clarifying questions strictly grounded in Section {sec_with_diag.order if sec_with_diag else 1}:")
-            user_q = st.text_input("Ask a question:", value="Why do we start counting from 0 in Python?")
-            if st.button("Ask Tutor"):
-                with st.spinner("ALMA is formulating explanation..."):
-                    sec_title = sec_with_diag.title if sec_with_diag else "this topic"
-                    ans = f"Great question, {mohamad.first_name}! In {sec_title}, 0-based indexing reflects memory offsets from the start of the sequence. It's a standard convention in Python and most modern languages."
-                    st.markdown(f"""
-                    <div class="callout-box callout-note">
-                        <b>🎓 ALMA:</b> {ans}
-                    </div>
-                    """, unsafe_allow_html=True)
+            # 6. Slide Navigation Bar
+            col_prev, col_middle, col_next = st.columns([1.2, 2.0, 1.2])
+
+            with col_prev:
+                if st.button("⬅️ Previous Slide", disabled=(slide_idx == 0), use_container_width=True):
+                    st.session_state.student_slide_idx = max(0, slide_idx - 1)
+                    st.rerun()
+
+            with col_middle:
+                st.markdown(f"<div style='text-align: center; padding-top: 0.5rem; font-weight: 600; opacity: 0.8;'>Slide {slide_idx + 1} / {total_slides}</div>", unsafe_allow_html=True)
+
+            with col_next:
+                if slide_idx < total_slides - 1:
+                    if st.button("Next Slide ➡️", type="primary", use_container_width=True):
+                        st.session_state.student_slide_idx = slide_idx + 1
+                        st.rerun()
+                else:
+                    if st.button("🎉 Finish Lesson", type="primary", use_container_width=True):
+                        st.session_state.lesson_completed_modal = True
+                        active_student.lessons_completed += 1
+                        active_student.current_streak += 1
+                        st.balloons()
+                        st.rerun()
+
+            if st.session_state.get("lesson_completed_modal"):
+                st.success(f"🏆 **Outstanding Work, {active_student.first_name}!** You have successfully completed **'{lesson_data.title}'**!")
+                st.info(f"🔥 Your learning streak has reached **{active_student.current_streak} lessons**! Keep up the momentum!")
+                if st.button("Start Next Lesson / Reset"):
+                    st.session_state.student_slide_idx = 0
+                    st.session_state.lesson_completed_modal = False
+                    st.rerun()
 
 

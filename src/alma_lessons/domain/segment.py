@@ -14,6 +14,8 @@ class Segment(BaseModel):
     attached_code: Optional[str] = None
     attached_code_language: Optional[str] = None
     assessment: Optional[SegmentAssessment] = None
+    audio_file: Optional[str] = Field(default=None, description="Filename of cached MP3 audio file")
+    audio_url: Optional[str] = Field(default=None, description="Endpoint or CDN URL to stream the audio file")
 
     # Template slots architecture: guarantees zero hallucination & pre-rendered audio cacheability
     is_verbatim_cacheable: bool = Field(

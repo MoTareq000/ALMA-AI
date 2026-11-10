@@ -19,6 +19,8 @@ PIPELINE_ARCHITECTURE_AND_ADAPTIVE_LEARNING.md
 # Scratch & Temporary Logs
 scratch/
 *.log
+data/audio/*.mp3
+!data/audio/.gitkeep
 
 # Python Cache & Virtual Environments
 *.egg-info/
