@@ -3,9 +3,12 @@ import re
 import time
 from typing import Optional, Dict, Any
 import requests
+import structlog
 
 from .interface import BaseLLMClient, LLMResponse
 from ..config import config
+
+logger = structlog.get_logger(__name__)
 
 
 class GoogleGeminiLLMClient(BaseLLMClient):
@@ -104,6 +107,16 @@ class GoogleGeminiLLMClient(BaseLLMClient):
         usage = res_json.get("usageMetadata", {})
         prompt_tokens = usage.get("promptTokenCount", 0)
         completion_tokens = usage.get("candidatesTokenCount", 0)
+
+        logger.info(
+            "llm_call_completed",
+            provider="google",
+            model=clean_model_id,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            latency_ms=round(elapsed_ms, 2),
+        )
 
         return LLMResponse(
             content=raw_content,

@@ -1,0 +1,17 @@
+{
+  "subject": "Programming",
+  "topic": "Conditionals and Logic in JavaScript",
+  "programming_language": "JavaScript",
+  "grade_level": "Grade 7",
+  "language": "en",
+  "learning_objectives": [
+    "Write if, else if, and else statements",
+    "Use strict equality (===) and inequality (!==)",
+    "Combine conditions with logical AND (&&) and OR (||)"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["JavaScript variables", "Data types"],
+  "curriculum_scope_notes": "Emphasize strict equality (===) exclusively; do not cover loose equality (==) or type coercion to prevent student confusion.",
+  "target_duration_minutes": 14
+}
+

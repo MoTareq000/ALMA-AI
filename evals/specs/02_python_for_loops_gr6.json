@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "For Loops and Sequences in Python",
+  "programming_language": "Python",
+  "grade_level": "Grade 6",
+  "language": "en",
+  "learning_objectives": [
+    "Understand why loops are used to repeat tasks",
+    "Use range() in a for loop",
+    "Trace loop variable execution step-by-step"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Variables", "Print statements"],
+  "target_duration_minutes": 12
+}
+

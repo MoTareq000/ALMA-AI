@@ -1,0 +1,17 @@
+{
+  "subject": "Programming",
+  "topic": "While Loops and Sentinel Values",
+  "programming_language": "Python",
+  "grade_level": "Grade 7",
+  "language": "en",
+  "learning_objectives": [
+    "Distinguish between for loops and while loops",
+    "Initialize and update a loop counter variable",
+    "Prevent infinite loops using conditional termination"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Variables", "Boolean conditionals", "Comparison operators"],
+  "curriculum_scope_notes": "Focus only on counter-controlled while loops. Do NOT introduce break or continue statements in this introductory session.",
+  "target_duration_minutes": 15
+}
+

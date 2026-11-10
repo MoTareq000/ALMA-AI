@@ -1,0 +1,38 @@
+{
+  "timestamp": "20261110_164436",
+  "provider": "fake",
+  "spec_count": 1,
+  "results": [
+    {
+      "spec_file": "01_python_variables_gr5.json",
+      "topic": "Variables and Basic Math in Python",
+      "language": "en",
+      "programming_language": "Python",
+      "grade_level": "Grade 5",
+      "status": "WARNINGS",
+      "has_blocking_errors": false,
+      "errors": [],
+      "warnings": [
+        "Some learning objectives may not be explicitly mapped to sections: Understand what a variable is in programming, Assign numbers and words to variables, Use print() to display variable values",
+        "Lesson length (96 words) is significantly below the target duration budget (10 min target ~ 1400 words). Consider generating with a deeper depth."
+      ],
+      "objective_coverage_pct": 0.0,
+      "uncovered_objectives": [
+        "Understand what a variable is in programming",
+        "Assign numbers and words to variables",
+        "Use print() to display variable values"
+      ],
+      "placeholders_count": 0,
+      "total_segments": 6,
+      "avg_segment_words": 16.3,
+      "segments_in_target_105_140": 0,
+      "python_blocks_count": 2,
+      "python_ast_errors": [],
+      "elapsed_sec": 0.028,
+      "llm_calls_count": 6,
+      "total_prompt_tokens": 600,
+      "total_completion_tokens": 900,
+      "total_tokens": 1500
+    }
+  ]
+}

@@ -1,5 +1,8 @@
 from typing import Optional, Dict, Any
+import structlog
 from .interface import BaseLLMClient, LLMResponse
+
+logger = structlog.get_logger(__name__)
 
 class FakeLLMClient(BaseLLMClient):
     """Deterministic fake LLM client for testing and offline scenarios."""
@@ -212,6 +215,16 @@ class FakeLLMClient(BaseLLMClient):
 
         import json
         content = json.dumps(parsed)
+
+        logger.info(
+            "llm_call_completed",
+            provider="fake",
+            model="fake-model",
+            prompt_tokens=100,
+            completion_tokens=150,
+            total_tokens=250,
+            latency_ms=12.5,
+        )
 
         return LLMResponse(
             content=content,

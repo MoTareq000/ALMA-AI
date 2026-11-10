@@ -3,8 +3,11 @@ import re
 import time
 from typing import Optional, Dict, Any
 from groq import Groq
+import structlog
 from .interface import BaseLLMClient, LLMResponse
 from ..config import config
+
+logger = structlog.get_logger(__name__)
 
 class GroqLLMClient(BaseLLMClient):
     """Groq client adapter using official groq SDK."""
@@ -72,6 +75,16 @@ class GroqLLMClient(BaseLLMClient):
         usage = getattr(completion, "usage", None)
         prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
         completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        logger.info(
+            "llm_call_completed",
+            provider="groq",
+            model=chosen_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            latency_ms=round(elapsed_ms, 2),
+        )
 
         return LLMResponse(
             content=raw_content,

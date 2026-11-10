@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Arrow Functions in Modern JavaScript",
+  "programming_language": "JavaScript",
+  "grade_level": "Grade 9",
+  "language": "en",
+  "learning_objectives": [
+    "Convert standard functions to arrow function syntax",
+    "Use concise one-line implicit returns",
+    "Pass arrow functions as callbacks to array methods"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["JavaScript functions", "Array basics"],
+  "target_duration_minutes": 15
+}
+

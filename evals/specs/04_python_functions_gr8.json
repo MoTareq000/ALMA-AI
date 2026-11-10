@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Defining and Calling Functions in Python",
+  "programming_language": "Python",
+  "grade_level": "Grade 8",
+  "language": "en",
+  "learning_objectives": [
+    "Define a reusable function with def",
+    "Pass arguments and parameters into functions",
+    "Return values from functions with return"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Variables", "Conditionals"],
+  "target_duration_minutes": 15
+}
+

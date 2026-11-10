@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Introduction to C++ and Standard Output",
+  "programming_language": "C++",
+  "grade_level": "Grade 9",
+  "language": "en",
+  "learning_objectives": [
+    "Understand the basic structure of a C++ main function",
+    "Declare typed variables (int, double, string)",
+    "Use std::cout and std::endl for output"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["General programming familiarity"],
+  "target_duration_minutes": 12
+}
+

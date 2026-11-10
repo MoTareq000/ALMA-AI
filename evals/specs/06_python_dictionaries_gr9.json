@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Key-Value Pairs with Python Dictionaries",
+  "programming_language": "Python",
+  "grade_level": "Grade 9",
+  "language": "en",
+  "learning_objectives": [
+    "Understand dictionary structure and keys vs values",
+    "Look up, add, and update dictionary entries",
+    "Iterate through keys and values using items()"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Lists", "Loops"],
+  "target_duration_minutes": 15
+}
+

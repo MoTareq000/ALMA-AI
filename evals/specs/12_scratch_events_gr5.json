@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Event Handling and Messages in Scratch",
+  "programming_language": "Scratch",
+  "grade_level": "Grade 5",
+  "language": "en",
+  "learning_objectives": [
+    "Trigger actions using the Green Flag event block",
+    "Respond to keyboard press events",
+    "Broadcast and receive messages between sprites"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Scratch interface basics"],
+  "target_duration_minutes": 10
+}
+

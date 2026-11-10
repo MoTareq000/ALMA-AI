@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Object-Oriented Programming: Classes in Java",
+  "programming_language": "Java",
+  "grade_level": "Grade 10",
+  "language": "en",
+  "learning_objectives": [
+    "Define a Java class with private fields",
+    "Create constructors for object initialization",
+    "Instantiate objects and call public methods"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Java primitive types", "Methods"],
+  "target_duration_minutes": 16
+}
+

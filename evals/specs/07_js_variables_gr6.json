@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Variables and Constants in JavaScript",
+  "programming_language": "JavaScript",
+  "grade_level": "Grade 6",
+  "language": "en",
+  "learning_objectives": [
+    "Declare variables using let and const",
+    "Recognize when to use const versus let",
+    "Log outputs using console.log()"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Basic web concepts"],
+  "target_duration_minutes": 10
+}
+

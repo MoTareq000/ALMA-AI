@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "حلقات التكرار في بايثون",
+  "programming_language": "Python",
+  "grade_level": "Grade 6",
+  "language": "ar",
+  "learning_objectives": [
+    "فهم مفهوم التكرار وأهميته في البرمجة",
+    "استخدام حلقة for مع الدالة range",
+    "تتبع المتغير داخل الحلقة وطباعة النتائج"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["المتغيرات", "جمل الطباعة print"],
+  "target_duration_minutes": 12
+}
+

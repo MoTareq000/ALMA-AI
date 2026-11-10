@@ -1,0 +1,16 @@
+{
+  "subject": "Programming",
+  "topic": "Variables and Basic Math in Python",
+  "programming_language": "Python",
+  "grade_level": "Grade 5",
+  "language": "en",
+  "learning_objectives": [
+    "Understand what a variable is in programming",
+    "Assign numbers and words to variables",
+    "Use print() to display variable values"
+  ],
+  "desired_depth": "standard",
+  "prerequisites": ["Basic computer literacy"],
+  "target_duration_minutes": 10
+}
+
