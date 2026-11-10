@@ -27,4 +27,4 @@ def get_job_status(job_id: str):
 @router.get("", response_model=List[JobStatusResponse])
 def list_generation_jobs():
     """List all tracked lesson generation jobs."""
-    return list(job_manager._jobs.values())
+    return job_manager.list_jobs()

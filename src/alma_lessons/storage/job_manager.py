@@ -1,9 +1,12 @@
 import uuid
-from typing import Dict, Any, Optional
+import logging
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from pydantic import BaseModel, Field
 from ..config import config
+
+logger = logging.getLogger(__name__)
 
 class JobRecord(BaseModel):
     """Tracks asynchronous lesson generation status aligned with ALMA LessonGeneration Mongoose schema."""
@@ -122,6 +125,23 @@ class JobManager:
             except Exception:
                 pass
         return job
+
+    def list_jobs(self) -> List[JobRecord]:
+        """Public method to list all tracked lesson generation jobs.
+        Reads from MongoDB collection when connected, otherwise returns in-memory jobs.
+        """
+        if self._collection is not None:
+            try:
+                jobs = []
+                for doc in self._collection.find().sort("created_at", -1):
+                    clean = {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in doc.items() if k != "_id"}
+                    job = JobRecord.model_validate(clean)
+                    jobs.append(job)
+                    self._jobs[job.job_id] = job
+                return jobs
+            except Exception as e:
+                logger.warning(f"Failed to query lesson_generations from Mongo: {e}")
+        return list(self._jobs.values())
 
     def update_progress(self, job_id: str, step: str, progress: float, message: str):
         job = self.get_job(job_id)
