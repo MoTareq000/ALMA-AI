@@ -54,15 +54,17 @@ class BaseStudentRepository:
 
 
 class LocalStudentRepository(BaseStudentRepository):
-    """In-memory local student repository pre-seeded with default student Mohamad.
-    Ready at any time to be replaced with MongoStudentRepository.
+    """In-memory local student repository.
+    Only seeds demo student when ALMA_SEED_DEMO_DATA=true.
     """
     def __init__(self):
         self._students: Dict[str, StudentProfile] = {}
-        self._seed_default_data()
+        from ..config import config
+        if config.alma_seed_demo_data:
+            self._seed_default_data()
 
     def _seed_default_data(self):
-        # Pre-seed with student Mohamad as requested
+        # Pre-seed with demo student Mohamad
         mohamad = StudentProfile(
             student_id="student_mohamad_001",
             first_name="Mohamad",
@@ -93,11 +95,19 @@ class LocalStudentRepository(BaseStudentRepository):
         )
         self._students[mohamad.student_id] = mohamad
 
+    def create_student(self, profile: StudentProfile) -> StudentProfile:
+        self._students[profile.student_id] = profile
+        return profile
+
     def get_student(self, student_id: str) -> Optional[StudentProfile]:
         return self._students.get(student_id)
 
-    def get_default_student(self) -> StudentProfile:
-        return self._students["student_mohamad_001"]
+    def get_default_student(self) -> Optional[StudentProfile]:
+        if "student_mohamad_001" in self._students:
+            return self._students["student_mohamad_001"]
+        if self._students:
+            return next(iter(self._students.values()))
+        return None
 
     def list_students(self) -> List[StudentProfile]:
         return list(self._students.values())

@@ -21,7 +21,15 @@ class MongoStudentRepository(BaseStudentRepository):
     def __init__(self):
         self.db = get_mongo_db()
         self.collection = self.db["students"] if self.db is not None else None
-        self._seed_default_mohamad_if_needed()
+        from ..config import config
+        if config.alma_seed_demo_data:
+            self._seed_default_mohamad_if_needed()
+
+    def create_student(self, profile: StudentProfile) -> StudentProfile:
+        if self.collection is not None:
+            doc = profile.model_dump()
+            self.collection.replace_one({"student_id": profile.student_id}, doc, upsert=True)
+        return profile
 
     def _seed_default_mohamad_if_needed(self):
         if self.collection is None:
@@ -128,24 +136,11 @@ class MongoStudentRepository(BaseStudentRepository):
         doc = self.collection.find_one(self._build_filter(student_id))
         return self._doc_to_profile(doc) if doc else None
 
-    def get_default_student(self) -> StudentProfile:
-        std = self.get_student("student_mohamad_001")
-        if std:
-            return std
+    def get_default_student(self) -> Optional[StudentProfile]:
         first = self.collection.find_one() if self.collection is not None else None
         if first:
             return self._doc_to_profile(first)
-        # Fallback profile
-        return StudentProfile(
-            student_id="student_mohamad_001",
-            first_name="Mohamad",
-            last_name="Ali",
-            email="mohamad.ali@alma.edu",
-            student_code="STD-MOH-2026",
-            grade_level="Grade 8",
-            school_name="ALMA Academy (Cairo Campus)",
-            current_streak=3
-        )
+        return None
 
     def list_students(self) -> List[StudentProfile]:
         if self.collection is None:

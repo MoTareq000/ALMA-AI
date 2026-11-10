@@ -140,7 +140,7 @@ class CurriculumExtractResponse(BaseModel):
 # ── Student Runtime ──────────────────────────────────────────────────
 
 class StartLessonSessionRequest(BaseModel):
-    student_id: Optional[str] = Field(default="student_mohamad_001")
+    student_id: str = Field(description="Unique student ID")
 
 
 class PersonalizedWrapperResponse(BaseModel):
@@ -164,7 +164,7 @@ class StartLessonSessionResponse(BaseModel):
 
 class CheckpointAnswerRequest(BaseModel):
     session_id: str
-    student_id: str = "student_mohamad_001"
+    student_id: str = Field(description="Unique student ID")
     section_order: int
     selected_option: Optional[str] = None
     selected_answer: Optional[str] = None
@@ -183,7 +183,7 @@ class CheckpointAnswerResponse(BaseModel):
 
 class AskAlmaRequest(BaseModel):
     session_id: str
-    student_id: str = "student_mohamad_001"
+    student_id: str = Field(description="Unique student ID")
     current_section_order: int
     question_text: str
 

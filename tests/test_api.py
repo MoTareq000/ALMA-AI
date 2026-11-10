@@ -22,11 +22,38 @@ def test_health_endpoint():
     assert "database_adapter" in data
 
 def test_student_profile_endpoint():
-    resp = client.get("/api/v1/runtime/students/student_mohamad_001")
+    # 1. Unknown student returns 404
+    resp = client.get("/api/v1/runtime/students/non_existent_student_999")
+    assert resp.status_code == 404
+
+    # 2. Create student explicitly
+    from alma_lessons.storage import StudentProfile, ConceptMasteryItem
+    test_std = StudentProfile(
+        student_id="test_student_001",
+        first_name="Layla",
+        last_name="Hassan",
+        email="layla@alma.edu",
+        student_code="STD-LAYLA-01",
+        grade_level="Grade 7",
+        school_name="ALMA Academy",
+        current_streak=5,
+        struggling_concepts=[
+            ConceptMasteryItem(
+                concept_id="python.loops",
+                concept_label="Loop iteration",
+                times_tested=4,
+                times_correct=2,
+                times_wrong=2
+            )
+        ]
+    )
+    student_repository.create_student(test_std)
+
+    resp = client.get("/api/v1/runtime/students/test_student_001")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["first_name"] == "Mohamad"
-    assert data["grade_level"] == "Grade 8"
+    assert data["first_name"] == "Layla"
+    assert data["grade_level"] == "Grade 7"
     assert len(data["struggling_concepts"]) >= 1
 
 from unittest.mock import patch
@@ -85,18 +112,38 @@ def test_lessons_endpoints_crud_and_runtime(mock_llm=None):
     assert detail["content"]["title"] == "While Loops in Python"
 
     # 4. Test Student Runtime: POST /api/v1/runtime/lessons/{id}/start
+    # 4a. Unknown student returns 404
     resp = client.post(f"/api/v1/runtime/lessons/{session.lesson_id}/start", json={
-        "student_id": "student_mohamad_001"
+        "student_id": "unknown_student_000"
+    })
+    assert resp.status_code == 404
+
+    # 4b. Create student explicitly for session
+    from alma_lessons.storage import StudentProfile
+    rt_student = StudentProfile(
+        student_id="student_runtime_001",
+        first_name="Kareem",
+        last_name="Adel",
+        email="kareem@alma.edu",
+        student_code="STD-KAREEM-01",
+        grade_level="Grade 8",
+        school_name="ALMA Academy",
+        current_streak=4
+    )
+    student_repository.create_student(rt_student)
+
+    resp = client.post(f"/api/v1/runtime/lessons/{session.lesson_id}/start", json={
+        "student_id": "student_runtime_001"
     })
     assert resp.status_code == 200
     runtime_data = resp.json()
-    assert "Mohamad" in runtime_data["personalized_wrapper"]["prefix_audio_text"]
-    assert runtime_data["student"]["first_name"] == "Mohamad"
+    assert "Kareem" in runtime_data["personalized_wrapper"]["prefix_audio_text"]
+    assert runtime_data["student"]["first_name"] == "Kareem"
 
     # 5. Test Checkpoint Answer (Correct)
     resp = client.post(f"/api/v1/runtime/lessons/{session.lesson_id}/checkpoints/answer", json={
         "session_id": runtime_data["session_id"],
-        "student_id": "student_mohamad_001",
+        "student_id": "student_runtime_001",
         "section_order": 1,
         "selected_option": "Loop ends"
     })
@@ -108,7 +155,7 @@ def test_lessons_endpoints_crud_and_runtime(mock_llm=None):
     # 6. Test Checkpoint Answer (Incorrect with Misconception & Remediation)
     resp = client.post(f"/api/v1/runtime/lessons/{session.lesson_id}/checkpoints/answer", json={
         "session_id": runtime_data["session_id"],
-        "student_id": "student_mohamad_001",
+        "student_id": "student_runtime_001",
         "section_order": 1,
         "selected_option": "Runs forever"
     })
@@ -122,13 +169,13 @@ def test_lessons_endpoints_crud_and_runtime(mock_llm=None):
     # 7. Test Ask ALMA
     resp = client.post(f"/api/v1/runtime/lessons/{session.lesson_id}/ask-alma", json={
         "session_id": runtime_data["session_id"],
-        "student_id": "student_mohamad_001",
+        "student_id": "student_runtime_001",
         "current_section_order": 1,
         "question_text": "Why do while loops need an increment?"
     })
     assert resp.status_code == 200
     alma_data = resp.json()
-    assert "Mohamad" in alma_data["student_name"]
+    assert "Kareem" in alma_data["student_name"]
     assert len(alma_data["spoken_answer"]) > 0
 
     # 8. Test Teacher In-place Edit: PUT /api/v1/lessons/{id}/edit
@@ -159,7 +206,7 @@ def test_lessons_endpoints_crud_and_runtime(mock_llm=None):
     # 11. Test Complete Lesson Session: POST /api/v1/runtime/lessons/{id}/complete
     resp = client.post(f"/api/v1/runtime/lessons/{session.lesson_id}/complete", json={
         "session_id": runtime_data["session_id"],
-        "student_id": "student_mohamad_001"
+        "student_id": "student_runtime_001"
     })
     assert resp.status_code == 200
     assert resp.json()["status"] == "completed"

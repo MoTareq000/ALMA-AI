@@ -8,7 +8,7 @@ Synchronized with ALMA's StudentLessonSession MongoDB schema.
 
 import uuid
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
 from ..security import verify_api_key
 
@@ -33,7 +33,7 @@ router = APIRouter(
 
 class CompleteLessonSessionRequest(BaseModel):
     session_id: str
-    student_id: Optional[str] = "student_mohamad_001"
+    student_id: str = Field(description="Unique student ID")
 
 
 @router.get("/students/{student_id}")
@@ -68,9 +68,9 @@ def start_lesson(lesson_id: str, req: StartLessonSessionRequest):
     curr = session.current_version
     content: LessonContent = curr.content
 
-    student = student_repository.get_student(req.student_id or "student_mohamad_001")
+    student = student_repository.get_student(req.student_id)
     if not student:
-        student = student_repository.get_default_student()
+        raise HTTPException(status_code=404, detail=f"Student '{req.student_id}' not found")
 
     # Build personalized greeting
     name = student.first_name
@@ -150,9 +150,9 @@ def answer_checkpoint(lesson_id: str, req: CheckpointAnswerRequest):
     if not is_correct and diag.misconception_map:
         misconception = diag.misconception_map.get(chosen)
 
-    student = student_repository.get_student(req.student_id or "student_mohamad_001")
+    student = student_repository.get_student(req.student_id)
     if not student:
-        student = student_repository.get_default_student()
+        raise HTTPException(status_code=404, detail=f"Student '{req.student_id}' not found")
 
     concept_id = getattr(diag, "concept_tag", None) or f"section_{section.order}_concept"
 
@@ -214,8 +214,10 @@ def ask_alma(lesson_id: str, req: AskAlmaRequest):
     section = next((s for s in curr.content.sections if s.order == req.current_section_order), None)
     sec_title = section.title if section else "this concept"
 
-    student = student_repository.get_student(req.student_id or "student_mohamad_001")
-    name = student.first_name if student else "Learner"
+    student = student_repository.get_student(req.student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail=f"Student '{req.student_id}' not found")
+    name = student.first_name
 
     # Find a relevant code block from the section
     ref_code = None
@@ -250,9 +252,12 @@ def complete_lesson(lesson_id: str, req: CompleteLessonSessionRequest):
     if not record:
         raise HTTPException(status_code=404, detail=f"Session '{req.session_id}' not found")
 
-    student_id = req.student_id or record.student_id
+    student = student_repository.get_student(req.student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail=f"Student '{req.student_id}' not found")
+
     if hasattr(student_repository, "increment_lessons_completed"):
-        student_repository.increment_lessons_completed(student_id)
+        student_repository.increment_lessons_completed(req.student_id)
 
     return {
         "status": "completed",
