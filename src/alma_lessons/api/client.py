@@ -35,8 +35,10 @@ class AlmaApiClient:
         return r.json()
 
     def get_job(self, job_id: str) -> Dict[str, Any]:
-        """Poll status of an asynchronous generation job."""
+        """Poll status of an asynchronous generation job (supports both /jobs/{id} and /lesson-generations/job/{id})."""
         r = requests.get(f"{self.base_url}/jobs/{job_id}", timeout=5)
+        if r.status_code == 404:
+            r = requests.get(f"{self.base_url}/lesson-generations/job/{job_id}", timeout=5)
         r.raise_for_status()
         return r.json()
 

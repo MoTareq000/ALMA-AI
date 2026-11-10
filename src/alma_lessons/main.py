@@ -55,12 +55,13 @@ app.add_middleware(
 )
 
 # Mount routers
-app.include_router(health.router,     prefix="/api/v1")
-app.include_router(curriculum.router, prefix="/api/v1")
-app.include_router(jobs.router,       prefix="/api/v1")
-app.include_router(lessons.router,    prefix="/api/v1")
-app.include_router(runtime.router,    prefix="/api/v1")
-app.include_router(audio.router,      prefix="/api/v1")
+app.include_router(health.router,            prefix="/api/v1")
+app.include_router(curriculum.router,        prefix="/api/v1")
+app.include_router(jobs.router,              prefix="/api/v1")
+app.include_router(jobs.jobs_alias_router,   prefix="/api/v1")
+app.include_router(lessons.router,           prefix="/api/v1")
+app.include_router(runtime.router,           prefix="/api/v1")
+app.include_router(audio.router,             prefix="/api/v1")
 
 
 @app.get("/", include_in_schema=False)
