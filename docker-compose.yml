@@ -1,0 +1,102 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - REQUIRE_MONGODB=true
+      - USE_MONGODB=true
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB_NAME=alma_lessons
+      - JOB_BACKEND=rq
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').getcode() == 200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "alma_lessons.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - REQUIRE_MONGODB=true
+      - USE_MONGODB=true
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB_NAME=alma_lessons
+      - JOB_BACKEND=rq
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  workbench:
+    profiles: ["ui"]
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - ALMA_API_BASE_URL=http://api:8000
+      - REQUIRE_MONGODB=true
+      - USE_MONGODB=true
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB_NAME=alma_lessons
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
+
