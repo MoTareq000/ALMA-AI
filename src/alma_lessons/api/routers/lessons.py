@@ -30,64 +30,19 @@ router = APIRouter(prefix="/lessons", tags=["Lessons"])
 
 
 # ---------------------------------------------------------------------------
-# Background generation worker
+# Background generation worker wrappers
 # ---------------------------------------------------------------------------
 
 def _run_generation(job_id: str, request: LessonCreateRequest):
-    """Background task: runs the full generation pipeline and stores the result."""
-    try:
-        # Align spec metadata
-        if request.course_id and not request.spec.course_id:
-            request.spec.course_id = request.course_id
-        if request.module_id and not request.spec.module_id:
-            request.spec.module_id = request.module_id
-        if request.created_by and not request.spec.created_by:
-            request.spec.created_by = request.created_by
+    """Worker task wrapper for initial lesson generation."""
+    from ...generation.tasks import run_generation_task
+    run_generation_task(job_id, request.model_dump())
 
-        llm_client = get_llm_client(provider=request.provider, model=request.model)
-        pipeline = LessonGenerationPipeline(llm_client=llm_client)
 
-        def on_progress(msg: str, pct: float):
-            step = "sections"
-            if "outline" in msg.lower():
-                step = "outline"
-            elif "bridge" in msg.lower():
-                step = "bridges"
-            elif "intro" in msg.lower():
-                step = "intro_conclusion"
-            elif "puzzle" in msg.lower() or "practice" in msg.lower():
-                step = "practice"
-            job_manager.update_progress(job_id, step=step, progress=pct * 0.8, message=msg)
-
-        # 1. Generate lesson content
-        lesson_content, outline = pipeline.run(request.spec, progress_callback=on_progress)
-
-        # 2. Segment into ~45-60s narration chunks
-        job_manager.update_progress(job_id, step="segmenting", progress=0.85, message="Creating audio narration segments...")
-        segmenter = BasicLessonSegmenter()
-        segmentation = segmenter.segment_lesson(
-            lesson_content,
-            spec=request.spec,
-            topic_assessment_generator=pipeline.generate_topic_micro_checks
-        )
-
-        # 3. Validate
-        job_manager.update_progress(job_id, step="validating", progress=0.95, message="Running validation checks...")
-        validator = ValidationRunner()
-        report = validator.run(lesson_content, request.spec)
-
-        # 4. Store
-        session = memory_store.create_lesson(
-            spec=request.spec,
-            content=lesson_content,
-            validation_report=report,
-            segmentation=segmentation
-        )
-
-        job_manager.complete_job(job_id, lesson_id=session.lesson_id)
-
-    except Exception as e:
-        job_manager.fail_job(job_id, str(e))
+def _run_regeneration(job_id: str, lesson_id: str, req: RegenerateLessonRequest):
+    """Worker task wrapper for lesson regeneration."""
+    from ...generation.tasks import run_regeneration_task
+    run_regeneration_task(job_id, lesson_id, req.model_dump())
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +65,8 @@ def generate_lesson(request: LessonCreateRequest, background_tasks: BackgroundTa
         requested_by=request.created_by or request.spec.created_by,
         metadata={"topic": request.spec.topic, "language": request.spec.programming_language}
     )
-    background_tasks.add_task(_run_generation, job.job_id, request)
+    from ...worker import enqueue_generation_job
+    enqueue_generation_job(job.job_id, request.model_dump(), background_tasks=background_tasks)
     return job
 
 
@@ -270,61 +226,6 @@ def reject_lesson(lesson_id: str, req: RejectLessonRequest):
     }
 
 
-def _run_regeneration(job_id: str, lesson_id: str, req: RegenerateLessonRequest):
-    """Background task for regeneration with teacher feedback."""
-    try:
-        session = memory_store.lessons.get(lesson_id)
-        if not session:
-            job_manager.fail_job(job_id, f"Lesson '{lesson_id}' not found")
-            return
-
-        llm_client = get_llm_client(provider=req.provider, model=req.model)
-        pipeline = LessonGenerationPipeline(llm_client=llm_client)
-
-        def on_progress(msg: str, pct: float):
-            step = "sections"
-            if "outline" in msg.lower():
-                step = "outline"
-            elif "bridge" in msg.lower():
-                step = "bridges"
-            elif "intro" in msg.lower():
-                step = "intro_conclusion"
-            elif "puzzle" in msg.lower() or "practice" in msg.lower():
-                step = "practice"
-            job_manager.update_progress(job_id, step=step, progress=pct * 0.8, message=msg)
-
-        new_lesson, _ = pipeline.run(
-            session.spec,
-            teacher_feedback=req.teacher_feedback,
-            progress_callback=on_progress
-        )
-
-        job_manager.update_progress(job_id, step="segmenting", progress=0.85, message="Re-segmenting narration chunks...")
-        segmenter = BasicLessonSegmenter()
-        seg = segmenter.segment_lesson(
-            new_lesson,
-            spec=session.spec,
-            topic_assessment_generator=pipeline.generate_topic_micro_checks
-        )
-
-        job_manager.update_progress(job_id, step="validating", progress=0.95, message="Validating regenerated content...")
-        validator = ValidationRunner()
-        report = validator.run(new_lesson, session.spec)
-
-        new_ver = memory_store.add_regeneration(
-            lesson_id=lesson_id,
-            new_content=new_lesson,
-            feedback=req.teacher_feedback,
-            validation_report=report
-        )
-        new_ver.segmentation = seg
-
-        job_manager.complete_job(job_id, lesson_id=lesson_id)
-
-    except Exception as e:
-        job_manager.fail_job(job_id, str(e))
-
-
 @router.post("/{lesson_id}/regenerate", response_model=JobStatusResponse, status_code=202)
 def regenerate_lesson(lesson_id: str, req: RegenerateLessonRequest, background_tasks: BackgroundTasks):
     """Re-generate the lesson using teacher feedback notes."""
@@ -343,5 +244,6 @@ def regenerate_lesson(lesson_id: str, req: RegenerateLessonRequest, background_t
         requested_by=getattr(session.spec, "created_by", None),
         metadata={"feedback": req.teacher_feedback}
     )
-    background_tasks.add_task(_run_regeneration, job.job_id, lesson_id, req)
+    from ...worker import enqueue_regeneration_job
+    enqueue_regeneration_job(job.job_id, lesson_id, req.model_dump(), background_tasks=background_tasks)
     return job

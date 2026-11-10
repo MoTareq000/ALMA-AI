@@ -13,17 +13,27 @@ root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from alma_lessons.api.routers import health, curriculum, jobs, lessons, runtime
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from alma_lessons.generation.tasks import cleanup_stale_jobs_on_startup
+    cleanup_stale_jobs_on_startup()
+    yield
+
+
 app = FastAPI(
     title="ALMA Academy — AI Lesson Generation API",
     description="Generate, validate, and deliver AI-powered programming lessons.",
     version="1.0.0",
     docs_url="/docs",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
