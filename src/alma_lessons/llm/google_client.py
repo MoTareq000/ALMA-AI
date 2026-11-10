@@ -13,7 +13,7 @@ class GoogleGeminiLLMClient(BaseLLMClient):
 
     def __init__(self, api_key: Optional[str] = None, default_model: Optional[str] = None):
         self.api_key = api_key or config.gemini_api_key
-        self.default_model = default_model or config.default_gemini_model or "gemini-3.5-flash-lite"
+        self.default_model = default_model or config.default_gemini_model or config.default_generator_model
         self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     def _clean_json_text(self, text: str) -> str:

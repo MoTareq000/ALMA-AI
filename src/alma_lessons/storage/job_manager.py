@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from bson import ObjectId
 from pydantic import BaseModel, Field
+from ..config import config
 
 class JobRecord(BaseModel):
     """Tracks asynchronous lesson generation status aligned with ALMA LessonGeneration Mongoose schema."""
@@ -11,7 +12,7 @@ class JobRecord(BaseModel):
     topic: Optional[str] = None
     programming_language: str = Field(default="Python")
     grade_level: str = Field(default="Grade 8")
-    model: str = Field(default="gemini-3.5-flash-lite")
+    model: str = Field(default_factory=lambda: config.default_generator_model)
     course_id: Optional[str] = None
     module_id: Optional[str] = None
     requested_by: Optional[str] = None
@@ -79,7 +80,7 @@ class JobManager:
         topic: Optional[str] = None,
         programming_language: str = "Python",
         grade_level: str = "Grade 8",
-        model: str = "gemini-3.5-flash-lite",
+        model: Optional[str] = None,
         course_id: Optional[str] = None,
         module_id: Optional[str] = None,
         requested_by: Optional[str] = None,
@@ -93,7 +94,7 @@ class JobManager:
             topic=topic or meta.get("topic") or "General Programming",
             programming_language=programming_language or meta.get("language") or "Python",
             grade_level=grade_level or meta.get("grade_level") or "Grade 8",
-            model=model or meta.get("model") or "gemini-3.5-flash-lite",
+            model=model or meta.get("model") or config.default_generator_model,
             course_id=course_id or meta.get("course_id"),
             module_id=module_id or meta.get("module_id"),
             requested_by=requested_by or meta.get("requested_by"),

@@ -8,6 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from datetime import datetime
 
+from ...config import config
 from ...storage import memory_store, job_manager
 from ...generation import LessonGenerationPipeline
 from ...segmentation import BasicLessonSegmenter
@@ -103,7 +104,7 @@ def generate_lesson(request: LessonCreateRequest, background_tasks: BackgroundTa
         topic=request.spec.topic,
         programming_language=request.spec.programming_language,
         grade_level=request.spec.grade_level,
-        model=request.model or "gemini-3.5-flash-lite",
+        model=request.model or config.default_generator_model,
         course_id=request.course_id or request.spec.course_id,
         module_id=request.module_id or request.spec.module_id,
         requested_by=request.created_by or request.spec.created_by,
@@ -336,7 +337,7 @@ def regenerate_lesson(lesson_id: str, req: RegenerateLessonRequest, background_t
         topic=session.spec.topic,
         programming_language=session.spec.programming_language,
         grade_level=session.spec.grade_level,
-        model=req.model or "gemini-3.5-flash-lite",
+        model=req.model or config.default_generator_model,
         course_id=getattr(session.spec, "course_id", None),
         module_id=getattr(session.spec, "module_id", None),
         requested_by=getattr(session.spec, "created_by", None),

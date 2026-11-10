@@ -15,7 +15,7 @@ class OpenRouterLLMClient(BaseLLMClient):
             base_url="https://openrouter.ai/api/v1",
             api_key=key or "missing-key"
         ) if key else None
-        self.default_model = default_model or "meta-llama/llama-3.3-70b-instruct"
+        self.default_model = default_model or config.default_openrouter_model
 
     def _clean_json_text(self, text: str) -> str:
         text = text.strip()

@@ -22,12 +22,12 @@ def get_llm_client(provider: Optional[str] = "gemini", model: Optional[str] = No
     elif "groq" in provider_str:
         return GroqLLMClient(
             api_key=config.groq_api_key,
-            default_model=model_clean or "llama-3.3-70b-versatile"
+            default_model=model_clean or config.default_groq_model
         )
     elif "openrouter" in provider_str:
         return OpenRouterLLMClient(
             api_key=config.openrouter_api_key,
-            default_model=model_clean or "google/gemini-2.5-flash"
+            default_model=model_clean or config.default_openrouter_model
         )
     elif "fake" in provider_str:
         return FakeLLMClient()

@@ -12,7 +12,7 @@ class GroqLLMClient(BaseLLMClient):
     def __init__(self, api_key: Optional[str] = None, default_model: Optional[str] = None):
         key = api_key or config.groq_api_key
         self.client = Groq(api_key=key) if key else None
-        self.default_model = default_model or config.default_generator_model
+        self.default_model = default_model or config.default_groq_model
 
     def _clean_json_text(self, text: str) -> str:
         """Strip markdown code fence blocks if returned by model."""
