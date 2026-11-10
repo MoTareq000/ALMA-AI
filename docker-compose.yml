@@ -97,6 +97,28 @@ services:
       api:
         condition: service_healthy
 
+  smoke-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "scripts/e2e_smoke_test.py"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - REQUIRE_MONGODB=true
+      - USE_MONGODB=true
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB_NAME=alma_lessons
+      - JOB_BACKEND=rq
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   mongo_data:
 

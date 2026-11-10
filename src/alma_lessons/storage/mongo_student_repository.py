@@ -25,7 +25,9 @@ class MongoStudentRepository(BaseStudentRepository):
         if config.alma_seed_demo_data:
             self._seed_default_mohamad_if_needed()
 
-    def create_student(self, profile: StudentProfile) -> StudentProfile:
+    def create_student(self, profile) -> StudentProfile:
+        if isinstance(profile, dict):
+            profile = StudentProfile(**profile)
         if self.collection is not None:
             doc = profile.model_dump()
             self.collection.replace_one({"student_id": profile.student_id}, doc, upsert=True)

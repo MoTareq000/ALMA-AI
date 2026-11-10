@@ -95,7 +95,9 @@ class LocalStudentRepository(BaseStudentRepository):
         )
         self._students[mohamad.student_id] = mohamad
 
-    def create_student(self, profile: StudentProfile) -> StudentProfile:
+    def create_student(self, profile) -> StudentProfile:
+        if isinstance(profile, dict):
+            profile = StudentProfile(**profile)
         self._students[profile.student_id] = profile
         return profile
 
