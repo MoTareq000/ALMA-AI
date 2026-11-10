@@ -29,7 +29,7 @@ from alma_lessons.segmentation import BasicLessonSegmenter
 from alma_lessons.storage import memory_store, LessonSession, student_repository
 from alma_lessons.api.client import AlmaApiClient
 from alma_lessons.config import config
-from alma_lessons.tts import audio_cache, GoogleCloudTTSClient, FakeTTSClient
+from alma_lessons.tts import audio_cache, GoogleCloudTTSClient, FakeTTSClient, GTTSClient
 
 api_client = AlmaApiClient(base_url="http://127.0.0.1:8000/api/v1")
 
@@ -262,23 +262,49 @@ with st.sidebar:
         client = OpenRouterLLMClient(api_key=api_key, default_model=generator_model)
 
     st.divider()
-    st.subheader("🎙️ Voice Settings (Google TTS)")
-    voice_options = [
-        "en-US-Journey-F",
-        "en-US-Journey-D",
-        "en-US-Neural2-F",
-        "en-US-Neural2-D",
-    ]
-    chosen_voice = st.selectbox("Teacher Voice Profile", voice_options, index=0, help="Journey voices provide natural, conversational tutoring intonation.")
+    st.subheader("🎙️ Voice Settings")
+    tts_engine = st.selectbox(
+        "Voice Engine",
+        ["Google TTS (Free / Instant Natural Voice)", "Google Cloud (Journey / Neural2)", "Offline Mock Audio (0 Cost / Fast Test)"],
+        index=0,
+        help="Google TTS works out-of-the-box with zero API keys or GCP credentials. Google Cloud Journey provides studio-grade voices using a Google Cloud Service Account JSON."
+    )
+
+    if tts_engine.startswith("Google Cloud"):
+        voice_options = [
+            "en-US-Journey-F",
+            "en-US-Journey-D",
+            "en-US-Neural2-F",
+            "en-US-Neural2-D",
+        ]
+        chosen_voice = st.selectbox("Teacher Voice Profile", voice_options, index=0, help="Journey voices provide natural, conversational tutoring intonation.")
+        st.caption("ℹ️ *Requires a Google Cloud Service Account JSON (`GOOGLE_APPLICATION_CREDENTIALS`). If not found, it seamlessly falls back to natural Google TTS.*")
+    elif tts_engine.startswith("Google TTS"):
+        voice_options = [
+            "en-US (Standard Natural)",
+            "en-GB (British Natural)",
+            "en-AU (Australian Natural)",
+        ]
+        chosen_voice = st.selectbox("Accent / Style", voice_options, index=0)
+    else:
+        chosen_voice = "en-US-Journey-F"
+
     voice_rate = st.slider("Speech Rate (Speed)", min_value=0.8, max_value=1.2, value=1.0, step=0.05)
-    use_mock_tts = st.checkbox("🧪 Offline Mock Voice (0 Cost / Fast Test)", value=False, help="Uses local synthesized test audio to test UI without calling Google Cloud API.")
+
+    def get_active_tts_client():
+        if tts_engine.startswith("Offline Mock"):
+            return FakeTTSClient()
+        elif tts_engine.startswith("Google TTS"):
+            return GTTSClient()
+        else:
+            return GoogleCloudTTSClient(allow_fallback=True)
 
     with st.expander("🔊 Test Teacher Voice", expanded=False):
         test_phrase = st.text_input("Sample text:", value="Welcome to ALMA Academy! Today we will master Python loops step by step.")
         if st.button("Play Voice Sample"):
             with st.spinner("Synthesizing voice sample..."):
                 try:
-                    tts_c = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                    tts_c = get_active_tts_client()
                     sample_bytes = tts_c.synthesize(text=test_phrase, voice_name=chosen_voice, speaking_rate=voice_rate)
                     st.audio(sample_bytes, format="audio/mp3")
                     st.success("Sample synthesized successfully!")
@@ -1008,10 +1034,10 @@ with tab_segments:
 
             col_tts1, col_tts2 = st.columns([1.8, 1.2])
             with col_tts1:
-                st.caption(f"Active Voice: **{chosen_voice}** | Engine: **{'Offline Mock' if use_mock_tts else 'Google Cloud Journey'}** | Speed: **{voice_rate}x**")
+                st.caption(f"Active Voice: **{chosen_voice}** | Engine: **{tts_engine}** | Speed: **{voice_rate}x**")
             with col_tts2:
                 if st.button("⚡ Synthesize All Segment Audio", type="primary", use_container_width=True):
-                    tts_client = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                    tts_client = get_active_tts_client()
                     all_segs = [s for t in seg_data.topics for s in t.segments]
                     synth_n = 0
                     cached_n = 0
@@ -1086,7 +1112,7 @@ with tab_segments:
                                 st.caption("Audio not synthesized yet for this segment.")
                             with c_a2:
                                 if st.button(f"🔊 Synthesize Voice #{seg.order_in_lesson}", key=f"btn_seg_{seg.order_in_lesson}"):
-                                    tts_client = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                                    tts_client = get_active_tts_client()
                                     try:
                                         a_bytes = tts_client.synthesize(seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
                                         audio_cache.save_audio(c_key, a_bytes)
@@ -1353,7 +1379,7 @@ with tab_runtime:
             with col_audio2:
                 if not (audio_path and audio_path.is_file()):
                     if st.button("⚡ Synthesize This Slide Audio", type="primary"):
-                        tts_client = FakeTTSClient() if use_mock_tts else GoogleCloudTTSClient()
+                        tts_client = get_active_tts_client()
                         try:
                             a_bytes = tts_client.synthesize(current_seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
                             audio_cache.save_audio(c_key, a_bytes)
