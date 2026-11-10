@@ -34,3 +34,4 @@ class GTTSClient(BaseTTSClient):
         tts.write_to_fp(fp)
         fp.seek(0)
         return fp.read()
+

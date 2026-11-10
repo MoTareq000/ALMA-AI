@@ -3,6 +3,9 @@
 .env.local
 *.env
 !.env.example
+*.json
+!package.json
+!tsconfig.json
 
 # ALMA Express / MongoDB Backend (External Repo)
 ALMA/

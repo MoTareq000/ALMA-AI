@@ -51,7 +51,7 @@ class PipelineConfig(BaseSettings):
     redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="REDIS_URL")
 
     # Text-to-Speech (Google Cloud TTS / gTTS) Settings
-    tts_provider: str = Field(default="auto", alias="TTS_PROVIDER")  # "auto", "google_cloud", "gtts", "fake"
+    tts_provider: str = Field(default="gtts", alias="TTS_PROVIDER")  # "gtts", "google_cloud", "auto", "fake"
     gcp_tts_api_key: str = Field(default="", alias="GCP_TTS_API_KEY")
     gcp_service_account_json: str = Field(default="", alias="GOOGLE_APPLICATION_CREDENTIALS")
     tts_voice_name: str = Field(default="en-US-Journey-F", alias="TTS_VOICE_NAME")
