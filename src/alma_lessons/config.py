@@ -50,11 +50,12 @@ class PipelineConfig(BaseSettings):
     job_backend: str = Field(default="inprocess", alias="JOB_BACKEND")  # "inprocess" or "rq"
     redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="REDIS_URL")
 
-    # Text-to-Speech (Google Cloud TTS / gTTS) Settings
-    tts_provider: str = Field(default="gtts", alias="TTS_PROVIDER")  # "gtts", "google_cloud", "auto", "fake"
+    # Text-to-Speech Settings
+    tts_provider: str = Field(default="kokoro", alias="TTS_PROVIDER")  # "kokoro", "edge", "google_cloud", "gtts", "fake"
+    hf_token: str = Field(default="", alias="HF_TOKEN")
     gcp_tts_api_key: str = Field(default="", alias="GCP_TTS_API_KEY")
     gcp_service_account_json: str = Field(default="", alias="GOOGLE_APPLICATION_CREDENTIALS")
-    tts_voice_name: str = Field(default="en-US-Journey-F", alias="TTS_VOICE_NAME")
+    tts_voice_name: str = Field(default="af_heart", alias="TTS_VOICE_NAME")
     tts_speaking_rate: float = Field(default=1.0, alias="TTS_SPEAKING_RATE")
     audio_cache_dir: Path = Field(default=ROOT_DIR / "data" / "audio", alias="AUDIO_CACHE_DIR")
 

@@ -29,7 +29,7 @@ from alma_lessons.segmentation import BasicLessonSegmenter
 from alma_lessons.storage import memory_store, LessonSession, student_repository
 from alma_lessons.api.client import AlmaApiClient
 from alma_lessons.config import config
-from alma_lessons.tts import audio_cache, GoogleCloudTTSClient, FakeTTSClient, GTTSClient
+from alma_lessons.tts import audio_cache, GoogleCloudTTSClient, FakeTTSClient, GTTSClient, EdgeTTSClient, KokoroTTSClient
 
 api_client = AlmaApiClient(base_url="http://127.0.0.1:8000/api/v1")
 
@@ -265,12 +265,38 @@ with st.sidebar:
     st.subheader("🎙️ Voice Settings")
     tts_engine = st.selectbox(
         "Voice Engine",
-        ["Google TTS (Free / Instant Natural Voice)", "Google Cloud (Journey / Neural2)", "Offline Mock Audio (0 Cost / Fast Test)"],
+        [
+            "Kokoro-82M (Hugging Face / fal-ai)",
+            "Edge Neural Voices (Free HD Studio - Ultra Natural)",
+            "Google Cloud (Journey / Neural2)",
+            "Google TTS (Standard Free Voice)",
+            "Offline Mock Audio (0 Cost / Fast Test)"
+        ],
         index=0,
-        help="Google TTS works out-of-the-box with zero API keys or GCP credentials. Google Cloud Journey provides studio-grade voices using a Google Cloud Service Account JSON."
+        help="Choose between Kokoro-82M, Microsoft Edge Neural HD voices, Google Cloud, or Google TTS."
     )
 
-    if tts_engine.startswith("Google Cloud"):
+    hf_token_val = config.hf_token or os.environ.get("HF_TOKEN", "")
+
+    if tts_engine.startswith("Kokoro"):
+        hf_token_input = st.text_input("Hugging Face API Token", value=hf_token_val, type="password")
+        chosen_voice = "hexgrad/Kokoro-82M"
+        st.caption("🎙️ *Model: `hexgrad/Kokoro-82M` (Provider: `fal-ai`). Automatic fallback to Edge Neural voice if HF account requires pre-paid credits.*")
+    elif tts_engine.startswith("Edge Neural"):
+        voice_map = {
+            "en-US-JennyNeural (Warm & Clear Female Teacher)": "en-US-JennyNeural",
+            "en-US-GuyNeural (Conversational Male Tutor)": "en-US-GuyNeural",
+            "en-US-AvaNeural (Expressive Studio Female)": "en-US-AvaNeural",
+            "en-US-AndrewNeural (Confident Studio Male)": "en-US-AndrewNeural",
+            "en-US-AriaNeural (Professional Female Instructor)": "en-US-AriaNeural",
+            "en-US-ChristopherNeural (Engaging Male Instructor)": "en-US-ChristopherNeural",
+            "en-GB-SoniaNeural (Polished British Female)": "en-GB-SoniaNeural",
+            "en-GB-RyanNeural (Friendly British Male)": "en-GB-RyanNeural",
+        }
+        chosen_label = st.selectbox("Teacher Voice Profile", list(voice_map.keys()), index=0)
+        chosen_voice = voice_map[chosen_label]
+        st.caption("✨ *100% Free, zero-setup Microsoft Neural Voice Engine with natural human pauses and intonation.*")
+    elif tts_engine.startswith("Google Cloud"):
         voice_options = [
             "en-US-Journey-F",
             "en-US-Journey-D",
@@ -278,7 +304,7 @@ with st.sidebar:
             "en-US-Neural2-D",
         ]
         chosen_voice = st.selectbox("Teacher Voice Profile", voice_options, index=0, help="Journey voices provide natural, conversational tutoring intonation.")
-        st.caption("ℹ️ *Requires a Google Cloud Service Account JSON (`GOOGLE_APPLICATION_CREDENTIALS`). If not found, it seamlessly falls back to natural Google TTS.*")
+        st.caption("ℹ️ *Requires a Google Cloud Service Account JSON (`GOOGLE_APPLICATION_CREDENTIALS`).*")
     elif tts_engine.startswith("Google TTS"):
         voice_options = [
             "en-US (Standard Natural)",
@@ -294,6 +320,10 @@ with st.sidebar:
     def get_active_tts_client():
         if tts_engine.startswith("Offline Mock"):
             return FakeTTSClient()
+        elif tts_engine.startswith("Kokoro"):
+            return KokoroTTSClient(api_key=hf_token_input if 'hf_token_input' in locals() else hf_token_val)
+        elif tts_engine.startswith("Edge Neural"):
+            return EdgeTTSClient()
         elif tts_engine.startswith("Google TTS"):
             return GTTSClient()
         else:
