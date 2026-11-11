@@ -6,6 +6,7 @@ from .google_tts import GoogleCloudTTSClient
 from .gtts_client import GTTSClient
 from .edge_tts_client import EdgeTTSClient
 from .kokoro_tts import KokoroTTSClient
+from .personalizer import build_personalized_script
 from ..config import config
 
 
@@ -41,5 +42,6 @@ __all__ = [
     "GTTSClient",
     "EdgeTTSClient",
     "KokoroTTSClient",
+    "build_personalized_script",
     "get_tts_client",
 ]

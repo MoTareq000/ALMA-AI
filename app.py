@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -29,7 +30,15 @@ from alma_lessons.segmentation import BasicLessonSegmenter
 from alma_lessons.storage import memory_store, LessonSession, student_repository
 from alma_lessons.api.client import AlmaApiClient
 from alma_lessons.config import config
-from alma_lessons.tts import audio_cache, GoogleCloudTTSClient, FakeTTSClient, GTTSClient, EdgeTTSClient, KokoroTTSClient
+from alma_lessons.tts import (
+    audio_cache,
+    GoogleCloudTTSClient,
+    FakeTTSClient,
+    GTTSClient,
+    EdgeTTSClient,
+    KokoroTTSClient,
+    build_personalized_script,
+)
 
 api_client = AlmaApiClient(base_url="http://127.0.0.1:8000/api/v1")
 
@@ -1381,40 +1390,75 @@ with tab_runtime:
             st.subheader(f"🎧 Slide {slide_idx + 1} of {total_slides}: {current_seg.title}")
             st.progress((slide_idx + 1) / total_slides)
 
-            # 1. Slide 1 Dynamic Greeting Card
-            if slide_idx == 0:
-                p_text = f"Hey {active_student.first_name}! "
-                if active_student.current_streak >= 3:
-                    p_text += f"Awesome to see your {active_student.current_streak}-lesson streak going strong! "
-                p_text += f"Today we're diving into {lesson_data.title} in {lesson_data.programming_language}. Let's get started!"
+            # Compute personalized script for active student on this slide
+            p_prefix, p_core, p_suffix, p_full_script = build_personalized_script(
+                student=active_student,
+                segment=current_seg,
+                slide_idx=slide_idx,
+                total_slides=total_slides,
+                lesson_title=lesson_data.title,
+            )
 
+            # 1. Personalization Controls
+            col_mode1, col_mode2 = st.columns([2.2, 1.8])
+            with col_mode1:
+                use_personalized_audio = st.toggle(
+                    f"🎙️ Speak Personalized Script for **{active_student.first_name}**",
+                    value=True,
+                    help="When enabled, the voice explicitly speaks the student's name, acknowledges their streak/struggles, and adds interactive coaching prompts."
+                )
+            with col_mode2:
+                if st.button(f"⚡ Batch Synthesize All {total_slides} Slides for {active_student.first_name}", use_container_width=True):
+                    with st.spinner(f"Synthesizing all {total_slides} personalized slides for {active_student.first_name}..."):
+                        t_client = get_active_tts_client()
+                        p_bar = st.progress(0.0)
+                        for s_i, seg_item in enumerate(all_slides):
+                            _, _, _, s_full = build_personalized_script(
+                                active_student, seg_item, s_i, total_slides, lesson_data.title
+                            )
+                            k = audio_cache.compute_cache_key(s_full, voice_name=chosen_voice, speaking_rate=voice_rate)
+                            if not audio_cache.has_audio(k):
+                                try:
+                                    b = t_client.synthesize(s_full, voice_name=chosen_voice, speaking_rate=voice_rate)
+                                    audio_cache.save_audio(k, b)
+                                except Exception:
+                                    pass
+                            p_bar.progress((s_i + 1) / total_slides)
+                        st.success(f"All {total_slides} slides personalized and audio-cached for {active_student.first_name}!")
+                        st.rerun()
+
+            # Determine active script and audio path
+            script_to_speak = p_full_script if use_personalized_audio else current_seg.narration_text
+            c_key = audio_cache.compute_cache_key(script_to_speak, voice_name=chosen_voice, speaking_rate=voice_rate)
+            audio_path = audio_cache.get_audio_path(c_key)
+
+            # 2. Audio Player & Dynamic Script Breakdown
+            if use_personalized_audio:
                 st.markdown(f"""
-                <div style="background-color: rgba(59, 130, 246, 0.08); border: 1px solid #3B82F6; border-radius: 10px; padding: 1.0rem 1.2rem; margin-bottom: 1.2rem;">
-                    <span style="font-size: 0.82rem; font-weight: 700; color: #3B82F6; text-transform: uppercase;">🎙️ Personalized Dynamic Welcome</span><br>
-                    <span style="font-size: 1.02rem; font-style: italic; color: var(--text-color, inherit);">"{p_text}"</span>
+                <div style="background-color: rgba(139, 92, 246, 0.08); border: 1px solid #8B5CF6; border-radius: 10px; padding: 1.0rem 1.2rem; margin-bottom: 1.0rem;">
+                    <span style="font-size: 0.80rem; font-weight: 700; color: #8B5CF6; text-transform: uppercase;">🎭 Spoken Personalized Script (Live Voice):</span><br>
+                    <span style="color: #A855F7; font-weight: 600;">{p_prefix}</span>
+                    <span style="color: var(--text-color, inherit);"> {p_core} </span>
+                    <span style="color: #3B82F6; font-weight: 600;">{p_suffix}</span>
                 </div>
                 """, unsafe_allow_html=True)
-
-            # 2. Audio Player for Current Segment
-            c_key = audio_cache.compute_cache_key(current_seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
-            audio_path = audio_cache.get_audio_path(c_key)
 
             col_audio1, col_audio2 = st.columns([2.5, 1.2])
             with col_audio1:
                 if audio_path and audio_path.is_file():
-                    st.markdown("🔊 **Teacher Narration Audio:**")
+                    player_label = f"🔊 Spoken Audio ({active_student.first_name}'s Personalized Voice):" if use_personalized_audio else "🔊 Standard Lesson Audio:"
+                    st.markdown(f"**{player_label}**")
                     st.audio(str(audio_path), format="audio/mp3")
                 else:
-                    st.caption("Audio not yet synthesized for this segment.")
+                    st.caption("Personalized audio not yet synthesized for this slide.")
             with col_audio2:
                 if not (audio_path and audio_path.is_file()):
-                    if st.button("⚡ Synthesize This Slide Audio", type="primary"):
+                    synth_btn_label = f"⚡ Synthesize Voice for {active_student.first_name}" if use_personalized_audio else "⚡ Synthesize Slide Audio"
+                    if st.button(synth_btn_label, type="primary"):
                         tts_client = get_active_tts_client()
                         try:
-                            a_bytes = tts_client.synthesize(current_seg.narration_text, voice_name=chosen_voice, speaking_rate=voice_rate)
+                            a_bytes = tts_client.synthesize(script_to_speak, voice_name=chosen_voice, speaking_rate=voice_rate)
                             audio_cache.save_audio(c_key, a_bytes)
-                            current_seg.audio_file = f"{c_key}.mp3"
-                            current_seg.audio_url = f"/api/v1/audio/{c_key}.mp3"
                             st.rerun()
                         except Exception as e:
                             st.error(f"TTS Error: {e}")
