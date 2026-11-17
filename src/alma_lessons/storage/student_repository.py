@@ -27,6 +27,7 @@ class StudentProfile(BaseModel):
     school_name: Optional[str] = "ALMA Academy"
     lessons_completed: int = 0
     current_streak: int = 0
+    archetype: str = Field(default="foundational", description="'foundational', 'fast_learner', 'practical_code_first', or 'conceptual'")
     struggling_concepts: List[ConceptMasteryItem] = Field(default_factory=list)
     preferences: StudentPreferences = Field(default_factory=StudentPreferences)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

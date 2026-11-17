@@ -30,7 +30,8 @@ class LessonGenerationPipeline:
 
     def generate_outline(self, spec: LessonSpec, attempts: int = 2) -> Outline:
         """Pass 1: Generate high-level outline ensuring all objectives are mapped and duration budgeted."""
-        target_mins = spec.target_duration_minutes or 15
+        is_test_mode = getattr(spec, "test_mode", False)
+        target_mins = 3 if is_test_mode else (spec.target_duration_minutes or 15)
         words_per_min = config.default_words_per_minute or 140
         total_target_words = target_mins * words_per_min
 
@@ -40,10 +41,10 @@ class LessonGenerationPipeline:
             "topic": spec.topic,
             "programming_language": spec.programming_language,
             "grade_level": spec.grade_level,
-            "desired_depth": spec.desired_depth,
+            "desired_depth": "basic" if is_test_mode else spec.desired_depth,
             "target_duration_minutes": target_mins,
             "total_target_words": total_target_words,
-            "learning_objectives": spec.learning_objectives,
+            "learning_objectives": spec.learning_objectives[:1] if is_test_mode else spec.learning_objectives,
             "prerequisites": ", ".join(spec.prerequisites) if spec.prerequisites else "None",
             "curriculum_references": ", ".join(spec.curriculum_references) if spec.curriculum_references else "Standard curriculum",
             "curriculum_scope_notes": getattr(spec, "curriculum_scope_notes", None) or "Standard grade-level scope",
@@ -63,6 +64,8 @@ class LessonGenerationPipeline:
                 # Verify that outline has sections
                 if not outline.sections:
                     raise ValueError("Outline returned zero sections")
+                if is_test_mode:
+                    outline.sections = outline.sections[:1]
                 if not outline.target_duration_minutes:
                     outline.target_duration_minutes = target_mins
                 if not outline.total_target_words:
@@ -479,10 +482,20 @@ class LessonGenerationPipeline:
 
         intro_blocks, conclusion_blocks = self.generate_intro_conclusion(spec, outline, sections)
 
-        if progress_callback:
-            progress_callback("Crafting interactive puzzles & hands-on coding exercises...", 0.90)
+        # Selective generation based on teacher/test preferences
+        allow_puzzles = getattr(spec, "generate_puzzles", True)
+        allow_exercises = getattr(spec, "generate_exercises", True)
 
-        puzzles, exercises = self.generate_lesson_practice(spec, outline, sections)
+        if allow_puzzles or allow_exercises:
+            if progress_callback:
+                progress_callback("Crafting interactive puzzles & hands-on coding exercises...", 0.90)
+            puzzles, exercises = self.generate_lesson_practice(spec, outline, sections)
+            if not allow_puzzles:
+                puzzles = []
+            if not allow_exercises:
+                exercises = []
+        else:
+            puzzles, exercises = [], []
 
         lesson = LessonContent(
             title=outline.title,

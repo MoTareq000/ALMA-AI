@@ -6,6 +6,7 @@ from .google_tts import GoogleCloudTTSClient
 from .gtts_client import GTTSClient
 from .edge_tts_client import EdgeTTSClient
 from .kokoro_tts import KokoroTTSClient
+from .elevenlabs_tts import ElevenLabsTTSClient
 from .personalizer import build_personalized_script
 from ..config import config
 
@@ -13,6 +14,7 @@ from ..config import config
 def get_tts_client(provider: Optional[str] = None) -> BaseTTSClient:
     """Factory returning configured TTS client.
     Supports:
+        - 'elevenlabs': ElevenLabs Studio AI voices
         - 'kokoro': Kokoro-82M (Hugging Face / fal-ai)
         - 'edge' / 'neural': Microsoft Edge Neural HD voices (Free, zero setup)
         - 'gtts': Basic Google TTS (Free, standard voice)
@@ -22,6 +24,8 @@ def get_tts_client(provider: Optional[str] = None) -> BaseTTSClient:
     selected = (provider or config.tts_provider or "kokoro").lower()
     if selected == "fake":
         return FakeTTSClient()
+    if selected in ("elevenlabs", "eleven_labs", "eleven"):
+        return ElevenLabsTTSClient()
     if selected in ("kokoro", "hexgrad/kokoro-82m"):
         return KokoroTTSClient()
     if selected in ("edge", "edge_tts", "neural", "free_neural", "auto"):
@@ -42,6 +46,7 @@ __all__ = [
     "GTTSClient",
     "EdgeTTSClient",
     "KokoroTTSClient",
+    "ElevenLabsTTSClient",
     "build_personalized_script",
     "get_tts_client",
 ]

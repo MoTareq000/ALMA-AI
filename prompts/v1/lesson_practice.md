@@ -24,9 +24,10 @@ CRITICAL ALIGNMENT & GROUNDING RULES:
    - Puzzle 1: "reorder_lines" (Parsons Problem): Provide 4-6 scrambled lines of code based directly on a code example taught in the lesson. The student arranges them in the correct sequence to solve the task.
    - Puzzle 2: "predict_output" (Code Tracing): A short, grounded code snippet using variables and patterns taught in the lesson where students trace execution and predict the exact printed output.
 
-3. HANDS-ON CODING EXERCISES (Generate 2 exercises):
-   - Exercise 1: "easy" (Scaffolded Warmup): A gentle direct application of the core example from the lesson. Starter code has clear fill-in comments.
-   - Exercise 2: "medium" (Core Challenge): Applies the concepts to a relatable scenario (e.g., student score tracker, shopping cart, game score).
+3. HANDS-ON CODING EXERCISES (Generate 3 tiered difficulty exercises):
+   - Exercise 1: "easy" (Foundational Warmup): A gentle direct application of the core example from the lesson. Starter code has clear fill-in comments (80% scaffolded).
+   - Exercise 2: "medium" (Core Application Challenge): Applies the concepts to a relatable scenario (e.g., score tracker, inventory, game logic). Starter code has function template and comments (50% scaffolded).
+   - Exercise 3: "hard" (Mastery Challenge): Algorithmic edge-case or multi-step extension that pushes deeper problem solving with minimal starter code (20% scaffolded).
    - For each exercise:
      * Clear, engaging task description
      * Starter code with clear scaffolding comments
@@ -72,6 +73,15 @@ Output valid JSON matching this schema:
       "task_description": "Build a program that...",
       "starter_code": "# Starter code\n...",
       "hints": ["Hint 1...", "Hint 2..."],
+      "solution_code": "working code...",
+      "expected_output": "Result..."
+    },
+    {
+      "title": "Mastery Edge Challenge",
+      "difficulty": "hard",
+      "task_description": "Extend your solution to handle edge cases or advanced conditions...",
+      "starter_code": "# Starter code\n...",
+      "hints": ["Hint 1 addressing edge conditions...", "Hint 2 addressing performance..."],
       "solution_code": "working code...",
       "expected_output": "Result..."
     }

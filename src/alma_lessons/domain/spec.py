@@ -18,3 +18,8 @@ class LessonSpec(BaseModel):
     course_id: Optional[str] = Field(default=None, description="Associated Course ID (MongoDB ObjectId)")
     module_id: Optional[str] = Field(default=None, description="Associated Module ID (MongoDB ObjectId)")
     created_by: Optional[str] = Field(default=None, description="Authoring Teacher ID (MongoDB ObjectId)")
+    test_mode: bool = Field(default=False, description="Fast 3-slide test mode to minimize token usage")
+    max_slides: Optional[int] = Field(default=None, description="Maximum number of slides/segments to generate")
+    generate_micro_checks: bool = Field(default=True, description="Generate slide-level micro-checks")
+    generate_puzzles: bool = Field(default=True, description="Generate interactive puzzles")
+    generate_exercises: bool = Field(default=True, description="Generate hands-on coding exercises")

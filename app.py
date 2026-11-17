@@ -22,12 +22,15 @@ from alma_lessons.domain import (
     LessonSegmentation,
     Outline,
     OutlineSection,
+    DifficultyLadder,
+    DIFFICULTY_METADATA,
 )
 from alma_lessons.llm import GroqLLMClient, OpenRouterLLMClient, GoogleGeminiLLMClient
 from alma_lessons.generation import LessonGenerationPipeline
 from alma_lessons.validation import ValidationRunner
 from alma_lessons.segmentation import BasicLessonSegmenter
 from alma_lessons.storage import memory_store, LessonSession, student_repository
+from alma_lessons.classification import ArchetypeClassifier, ARCHETYPES_INFO
 from alma_lessons.api.client import AlmaApiClient
 from alma_lessons.config import config
 from alma_lessons.tts import (
@@ -37,8 +40,10 @@ from alma_lessons.tts import (
     GTTSClient,
     EdgeTTSClient,
     KokoroTTSClient,
+    ElevenLabsTTSClient,
     build_personalized_script,
 )
+from alma_lessons.tts.elevenlabs_tts import ELEVENLABS_VOICE_MAP
 
 api_client = AlmaApiClient(base_url="http://127.0.0.1:8000/api/v1")
 
@@ -275,19 +280,26 @@ with st.sidebar:
     tts_engine = st.selectbox(
         "Voice Engine",
         [
-            "Kokoro-82M (Hugging Face / fal-ai)",
+            "ElevenLabs (Studio AI Voices - Ultra Realistic)",
             "Edge Neural Voices (Free HD Studio - Ultra Natural)",
+            "Kokoro-82M (Hugging Face / fal-ai)",
             "Google Cloud (Journey / Neural2)",
             "Google TTS (Standard Free Voice)",
             "Offline Mock Audio (0 Cost / Fast Test)"
         ],
         index=0,
-        help="Choose between Kokoro-82M, Microsoft Edge Neural HD voices, Google Cloud, or Google TTS."
+        help="Choose between ElevenLabs, Microsoft Edge Neural HD voices, Kokoro-82M, Google Cloud, or Google TTS."
     )
 
     hf_token_val = config.hf_token or os.environ.get("HF_TOKEN", "")
+    eleven_key_val = config.elevenlabs_api_key or os.environ.get("ELEVENLABS_API_KEY", "")
 
-    if tts_engine.startswith("Kokoro"):
+    if tts_engine.startswith("ElevenLabs"):
+        eleven_api_key_input = st.text_input("ElevenLabs API Key", value=eleven_key_val, type="password")
+        chosen_label = st.selectbox("Teacher Voice Profile", list(ELEVENLABS_VOICE_MAP.keys()), index=0)
+        chosen_voice = ELEVENLABS_VOICE_MAP[chosen_label]
+        st.caption("🎙️ *Ultra-realistic studio voice via ElevenLabs API. Seamless fallback to Edge Neural if quota runs out.*")
+    elif tts_engine.startswith("Kokoro"):
         hf_token_input = st.text_input("Hugging Face API Token", value=hf_token_val, type="password")
         chosen_voice = "hexgrad/Kokoro-82M"
         st.caption("🎙️ *Model: `hexgrad/Kokoro-82M` (Provider: `fal-ai`). Automatic fallback to Edge Neural voice if HF account requires pre-paid credits.*")
@@ -329,6 +341,9 @@ with st.sidebar:
     def get_active_tts_client():
         if tts_engine.startswith("Offline Mock"):
             return FakeTTSClient()
+        elif tts_engine.startswith("ElevenLabs"):
+            k = eleven_api_key_input if 'eleven_api_key_input' in locals() else eleven_key_val
+            return ElevenLabsTTSClient(api_key=k)
         elif tts_engine.startswith("Kokoro"):
             return KokoroTTSClient(api_key=hf_token_input if 'hf_token_input' in locals() else hf_token_val)
         elif tts_engine.startswith("Edge Neural"):
@@ -519,6 +534,24 @@ with tab_create:
 
     st.divider()
 
+    with st.expander("⚡ Generation Options & Test Mode (Token Optimizer)", expanded=True):
+        col_opt1, col_opt2 = st.columns([1.2, 1.8])
+        with col_opt1:
+            quick_test_mode = st.checkbox(
+                "🧪 Quick Test Mode (3 Slides Only)",
+                value=False,
+                help="Generates a super-fast 3-slide micro-lesson in seconds, consuming 80% fewer LLM tokens!"
+            )
+        with col_opt2:
+            st.markdown("**Components to Generate:**")
+            col_ck1, col_ck2, col_ck3 = st.columns(3)
+            with col_ck1:
+                gen_micro_checks = st.checkbox("Slide Quizzes", value=True)
+            with col_ck2:
+                gen_puzzles = st.checkbox("Logic Puzzles", value=True)
+            with col_ck3:
+                gen_exercises = st.checkbox("Coding Practice", value=True)
+
     if st.button("🚀 Generate Lesson (Run Two-Pass Pipeline)", type="primary", use_container_width=True):
         if not topic_input.strip():
             st.error("Please provide a lesson topic.")
@@ -535,12 +568,17 @@ with tab_create:
                 grade_level=grade_input,
                 language="en",
                 learning_objectives=objectives_list,
-                desired_depth=depth_input,
+                desired_depth="basic" if quick_test_mode else depth_input,
                 prerequisites=prereqs,
                 curriculum_references=curriculum,
                 curriculum_scope_notes=scope_input.strip() if scope_input.strip() else None,
                 additional_instructions=special_instructions or None,
-                target_duration_minutes=target_minutes,
+                target_duration_minutes=3 if quick_test_mode else target_minutes,
+                test_mode=quick_test_mode,
+                max_slides=3 if quick_test_mode else None,
+                generate_micro_checks=gen_micro_checks,
+                generate_puzzles=gen_puzzles,
+                generate_exercises=gen_exercises,
             )
 
             progress_bar = st.progress(0)
@@ -583,7 +621,7 @@ with tab_create:
                     segmentation_data = segmenter.segment_lesson(
                         generated_lesson,
                         spec=spec,
-                        topic_assessment_generator=pipeline.generate_topic_micro_checks
+                        topic_assessment_generator=pipeline.generate_topic_micro_checks if gen_micro_checks else None
                     )
 
                     status_text.info("🛡️ Running deterministic validators (schema, structure, coverage)...")
@@ -1335,10 +1373,23 @@ with tab_runtime:
         )
     active_student = student_repository.get_student(selected_stu_id) or all_students[0]
 
+    with col_stu2:
+        detected_archetype = ArchetypeClassifier.classify(active_student)
+        archetype_keys = list(ARCHETYPES_INFO.keys())
+        selected_archetype = st.selectbox(
+            "Student Learning Track & Archetype",
+            options=archetype_keys,
+            format_func=lambda k: ARCHETYPES_INFO[k]["badge"],
+            index=archetype_keys.index(detected_archetype) if detected_archetype in archetype_keys else 0,
+            help="Dynamic pedagogical adaptation: tunes voice tone, pace, analogies, and practice difficulty ladder!"
+        )
+
+    arch_meta = ARCHETYPES_INFO[selected_archetype]
+
     s_col1, s_col2, s_col3 = st.columns([1.5, 1.2, 1.3])
     with s_col1:
         st.markdown(f"""
-        <div class="segment-card" style="border-left: 5px solid #3B82F6;">
+        <div class="segment-card" style="border-left: 5px solid {arch_meta['color']};">
             <span style="font-size: 1.15rem; font-weight: 700;">👤 Student: {active_student.first_name} {active_student.last_name}</span><br>
             <span style="font-size: 0.85rem; opacity: 0.85;">🏫 {active_student.school_name or 'ALMA Academy'} | <b>{active_student.grade_level}</b></span><br>
             <span style="font-size: 0.85rem; opacity: 0.85;">🆔 Code: <code>{active_student.student_code}</code></span>
@@ -1348,10 +1399,9 @@ with tab_runtime:
         st.metric("Lessons Completed", active_student.lessons_completed)
         st.metric("Learning Streak", f"{active_student.current_streak} 🔥")
     with s_col3:
-        st.markdown("**⚙️ Learning Preferences:**")
-        st.write(f"- Pacing: `{active_student.preferences.pacing.title()}`")
-        st.write(f"- Tone: `{active_student.preferences.tone.title()}`")
-        st.write(f"- Voice: `{chosen_voice}`")
+        st.markdown(f"**🎭 Archetype: `{arch_meta['name']}`**")
+        st.caption(f"⚡ Pacing: `{arch_meta['pacing'].title()}` | Tone: `{arch_meta['tone'].title()}`")
+        st.caption(f"🎯 *{arch_meta['focus']}*")
 
     if active_student.struggling_concepts:
         st.markdown("##### ⚠️ Diagnosed Conceptual Struggles in Student History")
@@ -1390,36 +1440,82 @@ with tab_runtime:
             st.subheader(f"🎧 Slide {slide_idx + 1} of {total_slides}: {current_seg.title}")
             st.progress((slide_idx + 1) / total_slides)
 
-            # Compute personalized script for active student on this slide
+            # Student In-Player Voice Controls
+            col_v1, col_v2 = st.columns([1.6, 2.4])
+            with col_v1:
+                stu_tts_choice = st.selectbox(
+                    "🎙️ Choose Narrator Voice Engine",
+                    [
+                        "ElevenLabs (Studio AI Voices - Ultra Realistic)",
+                        "Edge Neural Voices (Free HD Studio - Ultra Natural)",
+                        "Google Cloud (Journey / Neural2)",
+                        "Google TTS (Standard Free Voice)",
+                    ],
+                    index=0 if tts_engine.startswith("ElevenLabs") else 1,
+                    key="tab6_stu_tts_engine"
+                )
+            with col_v2:
+                if stu_tts_choice.startswith("ElevenLabs"):
+                    stu_voice_opts = list(ELEVENLABS_VOICE_MAP.keys())
+                    stu_voice_lbl = st.selectbox("Narrator Voice Profile", stu_voice_opts, index=0, key="tab6_voice_profile_el")
+                    stu_active_voice = ELEVENLABS_VOICE_MAP[stu_voice_lbl]
+                elif stu_tts_choice.startswith("Edge Neural"):
+                    edge_voice_opts = [
+                        "en-US-JennyNeural (Warm & Clear Teacher)",
+                        "en-US-GuyNeural (Conversational Tutor)",
+                        "en-US-AvaNeural (Expressive Studio Female)",
+                        "en-US-AndrewNeural (Confident Studio Male)"
+                    ]
+                    stu_voice_lbl = st.selectbox("Narrator Voice Profile", edge_voice_opts, index=0, key="tab6_voice_profile_ed")
+                    stu_active_voice = stu_voice_lbl.split()[0]
+                elif stu_tts_choice.startswith("Google Cloud"):
+                    g_opts = ["en-US-Journey-F", "en-US-Journey-D", "en-US-Neural2-F"]
+                    stu_active_voice = st.selectbox("Narrator Voice Profile", g_opts, index=0, key="tab6_voice_profile_gc")
+                else:
+                    stu_active_voice = "en-US"
+
+            def get_student_tab_tts():
+                if stu_tts_choice.startswith("ElevenLabs"):
+                    k = config.elevenlabs_api_key or os.environ.get("ELEVENLABS_API_KEY", "")
+                    return ElevenLabsTTSClient(api_key=k)
+                elif stu_tts_choice.startswith("Edge Neural"):
+                    return EdgeTTSClient()
+                elif stu_tts_choice.startswith("Google TTS"):
+                    return GTTSClient()
+                else:
+                    return GoogleCloudTTSClient(allow_fallback=True)
+
+            # Compute personalized script for active student on this slide with archetype tuning
             p_prefix, p_core, p_suffix, p_full_script = build_personalized_script(
                 student=active_student,
                 segment=current_seg,
                 slide_idx=slide_idx,
                 total_slides=total_slides,
                 lesson_title=lesson_data.title,
+                archetype=selected_archetype,
             )
 
             # 1. Personalization Controls
             col_mode1, col_mode2 = st.columns([2.2, 1.8])
             with col_mode1:
                 use_personalized_audio = st.toggle(
-                    f"🎙️ Speak Personalized Script for **{active_student.first_name}**",
+                    f"🎙️ Speak Personalized Script for **{active_student.first_name}** ({arch_meta['name']})",
                     value=True,
-                    help="When enabled, the voice explicitly speaks the student's name, acknowledges their streak/struggles, and adds interactive coaching prompts."
+                    help="When enabled, the voice explicitly speaks the student's name, acknowledges their streak/struggles, and adapts tone to their archetype."
                 )
             with col_mode2:
                 if st.button(f"⚡ Batch Synthesize All {total_slides} Slides for {active_student.first_name}", use_container_width=True):
                     with st.spinner(f"Synthesizing all {total_slides} personalized slides for {active_student.first_name}..."):
-                        t_client = get_active_tts_client()
+                        t_client = get_student_tab_tts()
                         p_bar = st.progress(0.0)
                         for s_i, seg_item in enumerate(all_slides):
                             _, _, _, s_full = build_personalized_script(
-                                active_student, seg_item, s_i, total_slides, lesson_data.title
+                                active_student, seg_item, s_i, total_slides, lesson_data.title, archetype=selected_archetype
                             )
-                            k = audio_cache.compute_cache_key(s_full, voice_name=chosen_voice, speaking_rate=voice_rate)
+                            k = audio_cache.compute_cache_key(s_full, voice_name=stu_active_voice, speaking_rate=voice_rate)
                             if not audio_cache.has_audio(k):
                                 try:
-                                    b = t_client.synthesize(s_full, voice_name=chosen_voice, speaking_rate=voice_rate)
+                                    b = t_client.synthesize(s_full, voice_name=stu_active_voice, speaking_rate=voice_rate)
                                     audio_cache.save_audio(k, b)
                                 except Exception:
                                     pass
@@ -1429,7 +1525,7 @@ with tab_runtime:
 
             # Determine active script and audio path
             script_to_speak = p_full_script if use_personalized_audio else current_seg.narration_text
-            c_key = audio_cache.compute_cache_key(script_to_speak, voice_name=chosen_voice, speaking_rate=voice_rate)
+            c_key = audio_cache.compute_cache_key(script_to_speak, voice_name=stu_active_voice, speaking_rate=voice_rate)
             audio_path = audio_cache.get_audio_path(c_key)
 
             # 2. Audio Player & Dynamic Script Breakdown
@@ -1455,9 +1551,9 @@ with tab_runtime:
                 if not (audio_path and audio_path.is_file()):
                     synth_btn_label = f"⚡ Synthesize Voice for {active_student.first_name}" if use_personalized_audio else "⚡ Synthesize Slide Audio"
                     if st.button(synth_btn_label, type="primary"):
-                        tts_client = get_active_tts_client()
+                        tts_client = get_student_tab_tts()
                         try:
-                            a_bytes = tts_client.synthesize(script_to_speak, voice_name=chosen_voice, speaking_rate=voice_rate)
+                            a_bytes = tts_client.synthesize(script_to_speak, voice_name=stu_active_voice, speaking_rate=voice_rate)
                             audio_cache.save_audio(c_key, a_bytes)
                             st.rerun()
                         except Exception as e:
@@ -1570,5 +1666,116 @@ with tab_runtime:
                     st.session_state.student_slide_idx = 0
                     st.session_state.lesson_completed_modal = False
                     st.rerun()
+
+            # 7. Adaptive Coding Practice with Dynamic Difficulty Ladder
+            if lesson_data.exercises:
+                st.divider()
+                st.subheader("🧩 Adaptive Coding Practice (Dynamic Difficulty Ladder)")
+                st.caption("Practice exercises automatically adapt to your performance in real-time: solve correctly to level up, or receive guided scaffolding when stuck.")
+
+                ladder_state_key = f"ladder_lvl_{active_student.student_id}_{current_session.lesson_id}"
+                if ladder_state_key not in st.session_state:
+                    # Initialize starting level based on archetype recommendation
+                    st.session_state[ladder_state_key] = arch_meta.get("recommended_starting_difficulty", "medium")
+
+                current_level = st.session_state[ladder_state_key]
+                cur_meta = DIFFICULTY_METADATA.get(current_level, DIFFICULTY_METADATA["medium"])
+
+                # Visual Difficulty Ladder Gauge
+                col_g1, col_g2, col_g3 = st.columns(3)
+                with col_g1:
+                    is_active = (current_level == "easy")
+                    border = "3px solid #10B981" if is_active else "1px solid rgba(128,128,128,0.2)"
+                    bg = "rgba(16, 185, 129, 0.15)" if is_active else "rgba(128,128,128,0.04)"
+                    st.markdown(f"""
+                    <div style="border: {border}; background: {bg}; border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center;">
+                        <span style="font-weight: 700; color: #10B981;">🟢 1. Easy (Warmup)</span><br>
+                        <span style="font-size: 0.75rem; opacity: 0.8;">Guided fill-in code</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_g2:
+                    is_active = (current_level == "medium")
+                    border = "3px solid #F59E0B" if is_active else "1px solid rgba(128,128,128,0.2)"
+                    bg = "rgba(245, 158, 11, 0.15)" if is_active else "rgba(128,128,128,0.04)"
+                    st.markdown(f"""
+                    <div style="border: {border}; background: {bg}; border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center;">
+                        <span style="font-weight: 700; color: #F59E0B;">🟡 2. Medium (Core)</span><br>
+                        <span style="font-size: 0.75rem; opacity: 0.8;">Standard scenario</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_g3:
+                    is_active = (current_level == "hard")
+                    border = "3px solid #EF4444" if is_active else "1px solid rgba(128,128,128,0.2)"
+                    bg = "rgba(239, 68, 68, 0.15)" if is_active else "rgba(128,128,128,0.04)"
+                    st.markdown(f"""
+                    <div style="border: {border}; background: {bg}; border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center;">
+                        <span style="font-weight: 700; color: #EF4444;">🔴 3. Hard (Mastery)</span><br>
+                        <span style="font-size: 0.75rem; opacity: 0.8;">Edge case challenge</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                st.write("")
+                # Retrieve active exercise for this level
+                matched_exercise = DifficultyLadder.get_exercise_for_level(lesson_data.exercises, current_level)
+                if matched_exercise:
+                    st.markdown(f"""
+                    <div class="segment-card" style="border-left: 5px solid {cur_meta['color']}; margin-top: 0.5rem;">
+                        <span style="font-size: 1.15rem; font-weight: 700;">Challenge: {matched_exercise.title}</span>
+                        <span class="badge" style="background-color: {cur_meta['color']}22; color: {cur_meta['color']}; border: 1px solid {cur_meta['color']};">{cur_meta['name'].upper()}</span><br>
+                        <p style="margin-top: 0.5rem; font-size: 1.0rem; line-height: 1.5;">{matched_exercise.task_description}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.markdown(f"**💻 Starter Code ({lesson_data.programming_language}):**")
+                    stu_code_input = st.text_area(
+                        "Your Code Solution:",
+                        value=matched_exercise.starter_code,
+                        height=160,
+                        key=f"stu_code_{current_level}_{current_session.lesson_id}"
+                    )
+
+                    hint_count_key = f"hints_shown_{active_student.student_id}_{current_level}"
+                    if hint_count_key not in st.session_state:
+                        st.session_state[hint_count_key] = 0
+
+                    c_act1, c_act2, c_act3 = st.columns([1.5, 1.2, 2.0])
+                    with c_act1:
+                        if st.button("▶️ Submit Code & Test", type="primary", key=f"sub_code_{current_level}"):
+                            is_solved = (stu_code_input.strip() != matched_exercise.starter_code.strip() and len(stu_code_input.strip()) > 15)
+                            if is_solved:
+                                st.success(f"🎉 **Brilliant execution, {active_student.first_name}!**")
+                                if current_level == "hard":
+                                    st.balloons()
+                                    st.info("🏆 **Maximum Mastery Level Achieved on this Lesson!**")
+                                else:
+                                    next_lvl = DifficultyLadder.promote(current_level)
+                                    st.session_state[ladder_state_key] = next_lvl
+                                    st.success(f"📈 **Level UP! Moving from {current_level.upper()} ➡️ {next_lvl.upper()}!**")
+                                    st.rerun()
+                            else:
+                                st.warning("⚠️ Code appears unchanged or incomplete. Try completing the scaffold or click 'Need a Hint'.")
+
+                    with c_act2:
+                        if matched_exercise.hints:
+                            if st.button("💡 Need a Hint?", key=f"btn_hint_{current_level}"):
+                                st.session_state[hint_count_key] = min(st.session_state[hint_count_key] + 1, len(matched_exercise.hints))
+
+                    with c_act3:
+                        if current_level != "easy":
+                            if st.button("🔄 Step Down (Need Warmup)", key=f"btn_demote_{current_level}"):
+                                prev_lvl = DifficultyLadder.demote(current_level)
+                                st.session_state[ladder_state_key] = prev_lvl
+                                st.info(f"📉 Stepped down to {prev_lvl.upper()} to reinforce the basics first.")
+                                st.rerun()
+
+                    # Render revealed hints if requested
+                    hints_to_show = st.session_state.get(hint_count_key, 0)
+                    if hints_to_show > 0:
+                        for h_i in range(hints_to_show):
+                            st.info(f"💡 **Hint {h_i+1}:** {matched_exercise.hints[h_i]}")
+
+                    with st.expander("📖 View Expected Output & Reference Solution (Self-Check)"):
+                        st.caption(f"**Expected Output:** `{matched_exercise.expected_output}`")
+                        st.code(matched_exercise.solution_code, language=lesson_data.programming_language.lower())
 
 

@@ -146,8 +146,38 @@ class BasicLessonSegmenter:
             ))
             global_order += len(concl_segs)
 
+        # Determine max slide cap if in test mode or explicitly requested
+        max_slides = getattr(spec, "max_slides", None) if spec else None
+        if not max_slides and spec and getattr(spec, "test_mode", False):
+            max_slides = 3
+
+        # If max_slides is set, prune topics and segments to strictly fit within max_slides
+        if max_slides and max_slides > 0:
+            pruned_topics: List[TopicSegmentation] = []
+            collected_count = 0
+            for t in topics:
+                if collected_count >= max_slides:
+                    break
+                remaining_quota = max_slides - collected_count
+                if len(t.segments) <= remaining_quota:
+                    pruned_topics.append(t)
+                    collected_count += len(t.segments)
+                else:
+                    t.segments = t.segments[:remaining_quota]
+                    pruned_topics.append(t)
+                    collected_count += len(t.segments)
+                    break
+            topics = [t for t in pruned_topics if t.segments]
+            # Re-index global order
+            g_idx = 1
+            for t in topics:
+                for s in t.segments:
+                    s.order_in_lesson = g_idx
+                    g_idx += 1
+
         # Attach micro-check assessment questions (batched per topic preferred)
-        if topic_assessment_generator and spec:
+        allow_micro_checks = getattr(spec, "generate_micro_checks", True) if spec else True
+        if allow_micro_checks and topic_assessment_generator and spec:
             for t in topics:
                 try:
                     topic_checks = topic_assessment_generator(spec, t.topic_title, t.purpose, t.segments)

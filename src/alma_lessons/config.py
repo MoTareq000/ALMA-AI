@@ -51,7 +51,8 @@ class PipelineConfig(BaseSettings):
     redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="REDIS_URL")
 
     # Text-to-Speech Settings
-    tts_provider: str = Field(default="kokoro", alias="TTS_PROVIDER")  # "kokoro", "edge", "google_cloud", "gtts", "fake"
+    tts_provider: str = Field(default="kokoro", alias="TTS_PROVIDER")  # "kokoro", "edge", "elevenlabs", "google_cloud", "gtts", "fake"
+    elevenlabs_api_key: str = Field(default="", alias="ELEVENLABS_API_KEY")
     hf_token: str = Field(default="", alias="HF_TOKEN")
     gcp_tts_api_key: str = Field(default="", alias="GCP_TTS_API_KEY")
     gcp_service_account_json: str = Field(default="", alias="GOOGLE_APPLICATION_CREDENTIALS")
