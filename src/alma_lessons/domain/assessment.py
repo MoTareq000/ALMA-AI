@@ -1,3 +1,4 @@
+import uuid
 from typing import List, Optional, Literal, Dict
 from pydantic import BaseModel, Field
 
@@ -33,6 +34,7 @@ class SegmentAssessment(BaseModel):
 
 class PuzzleChallenge(BaseModel):
     """Logic or code-tracing puzzle consolidating concepts across sections."""
+    puzzle_id: Optional[str] = Field(default_factory=lambda: f"puz_{uuid.uuid4().hex[:8]}", description="Unique puzzle identifier")
     puzzle_type: PuzzleType = Field(..., description="Puzzle style: code_trace, reorder_lines, predict_output")
     title: str = Field(..., description="Engaging title for the puzzle")
     description: str = Field(..., description="Instructions and context for the puzzle")
@@ -43,6 +45,7 @@ class PuzzleChallenge(BaseModel):
 
 class CodingExercise(BaseModel):
     """Hands-on programming exercise with scaffolded starter code and solution."""
+    exercise_id: Optional[str] = Field(default_factory=lambda: f"ex_{uuid.uuid4().hex[:8]}", description="Unique exercise identifier")
     title: str = Field(..., description="Exercise title")
     difficulty: ExerciseDifficulty = Field(default="medium", description="easy, medium, or hard")
     task_description: str = Field(..., description="Clear real-world programming problem statement")

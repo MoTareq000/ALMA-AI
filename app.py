@@ -1930,7 +1930,8 @@ with tab_practice:
             """, unsafe_allow_html=True)
 
             # In-browser Code IDE
-            editor_key = f"code_input_{active_practice.practice_id}_{matched_exercise.exercise_id}_{current_diff}"
+            ex_id = getattr(matched_exercise, "exercise_id", None) or f"ex_{current_diff}"
+            editor_key = f"code_input_{active_practice.practice_id}_{ex_id}_{current_diff}"
             if editor_key not in st.session_state:
                 st.session_state[editor_key] = matched_exercise.starter_code
 
@@ -1945,7 +1946,7 @@ with tab_practice:
             btn_col1, btn_col2, btn_col3, btn_col4 = st.columns([1.5, 1.2, 1.2, 1.2])
 
             with btn_col1:
-                if st.button("▶️ Submit Code & Test", type="primary", use_container_width=True, key=f"btn_eval_{matched_exercise.exercise_id}"):
+                if st.button("▶️ Submit Code & Test", type="primary", use_container_width=True, key=f"btn_eval_{ex_id}"):
                     with st.spinner("Evaluating code solution..."):
                         sub_payload = {
                             "student_id": prac_student.student_id,
@@ -1994,7 +1995,7 @@ with tab_practice:
                             st.warning(f"⚠️ **Keep Going, {prac_student.first_name}!** {eval_res.get('feedback')}\n\nMake sure your code implements the required task logic and check the hints below.")
 
             with btn_col2:
-                if st.button("💡 Need a Hint", use_container_width=True, key=f"btn_hint_{matched_exercise.exercise_id}"):
+                if st.button("💡 Need a Hint", use_container_width=True, key=f"btn_hint_{ex_id}"):
                     if matched_exercise.hints:
                         st.session_state[hints_key] = min(st.session_state[hints_key] + 1, len(matched_exercise.hints))
                         st.rerun()
@@ -2003,13 +2004,13 @@ with tab_practice:
 
             with btn_col3:
                 can_step_down = (current_diff != "easy")
-                if st.button("🔄 Step Down", disabled=not can_step_down, use_container_width=True, key=f"btn_demote_{matched_exercise.exercise_id}"):
+                if st.button("🔄 Step Down", disabled=not can_step_down, use_container_width=True, key=f"btn_demote_{ex_id}"):
                     st.session_state[diff_state_key] = DifficultyLadder.demote(current_diff)
                     st.rerun()
 
             with btn_col4:
                 can_step_up = (current_diff != "hard")
-                if st.button("🚀 Step Up", disabled=not can_step_up, use_container_width=True, key=f"btn_promote_{matched_exercise.exercise_id}"):
+                if st.button("🚀 Step Up", disabled=not can_step_up, use_container_width=True, key=f"btn_promote_{ex_id}"):
                     st.session_state[diff_state_key] = DifficultyLadder.promote(current_diff)
                     st.rerun()
 
