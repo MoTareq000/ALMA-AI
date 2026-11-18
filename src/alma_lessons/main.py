@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from alma_lessons.config import config
-from alma_lessons.api.routers import health, curriculum, jobs, lessons, runtime, audio
+from alma_lessons.api.routers import health, curriculum, jobs, lessons, runtime, audio, practice
 
 
 @asynccontextmanager
@@ -60,6 +60,7 @@ app.include_router(curriculum.router,        prefix="/api/v1")
 app.include_router(jobs.router,              prefix="/api/v1")
 app.include_router(jobs.jobs_alias_router,   prefix="/api/v1")
 app.include_router(lessons.router,           prefix="/api/v1")
+app.include_router(practice.router,          prefix="/api/v1")
 app.include_router(runtime.router,           prefix="/api/v1")
 app.include_router(audio.router,             prefix="/api/v1")
 

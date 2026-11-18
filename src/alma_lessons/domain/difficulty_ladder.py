@@ -82,3 +82,4 @@ class DifficultyLadder:
                     return m[0]
 
         return exercises[0]
+

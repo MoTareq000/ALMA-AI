@@ -35,7 +35,7 @@ class FakeLLMClient(BaseLLMClient):
                 "correct_answer": "range()",
                 "explanation": "The range() function produces an iterable sequence of numbers in Python."
             }
-        elif "practice puzzles and hands-on coding exercises" in prompt.lower() or "senior computer science educator" in prompt.lower():
+        elif any(k in prompt.lower() for k in ("practice puzzles and hands-on coding exercises", "senior computer science", "course practice context", "practice design rules")):
             parsed = {
                 "puzzles": [
                     {

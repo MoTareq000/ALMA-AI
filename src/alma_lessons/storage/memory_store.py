@@ -2,7 +2,7 @@ import json
 import datetime
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
-from ..domain import LessonSpec, LessonContent, LessonState, LessonSegmentation
+from ..domain import LessonSpec, LessonContent, LessonState, LessonSegmentation, PracticeSet
 
 import hashlib
 
@@ -57,7 +57,20 @@ class MemoryLessonStore:
 
     def __init__(self):
         self.lessons: Dict[str, LessonSession] = {}
+        self.practice_sets: Dict[str, PracticeSet] = {}
         self._next_id = 1
+
+    def save_practice_set(self, practice_set: PracticeSet) -> PracticeSet:
+        self.practice_sets[practice_set.practice_id] = practice_set
+        return practice_set
+
+    def get_practice_set(self, practice_id: str) -> Optional[PracticeSet]:
+        return self.practice_sets.get(practice_id)
+
+    def list_practice_sets(self, course_id: Optional[str] = None) -> List[PracticeSet]:
+        if course_id:
+            return [p for p in self.practice_sets.values() if p.course_id == course_id]
+        return list(self.practice_sets.values())
 
     def create_lesson(
         self,

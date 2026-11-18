@@ -4,3 +4,4 @@ __all__ = [
     "ArchetypeClassifier",
     "ARCHETYPES_INFO",
 ]
+

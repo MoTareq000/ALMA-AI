@@ -14,6 +14,7 @@ from ..domain import (
     Section,
     Block,
     DiagnosticQuestion,
+    PracticeSet,
 )
 from .memory_store import LessonVersionRecord, LessonSession
 from .mongo_client import get_mongo_db
@@ -292,6 +293,7 @@ class MongoLessonStore:
         self.db = get_mongo_db()
         self.collection = self.db["lessons"] if self.db is not None else None
         self._cache: Dict[str, LessonSession] = {}
+        self.practice_sets: Dict[str, PracticeSet] = {}
         self._next_id = 1
         self._load_from_db()
 
@@ -499,3 +501,18 @@ class MongoLessonStore:
         for lid, s_dict in raw.items():
             loaded[lid] = LessonSession.model_validate(s_dict)
             self._persist(loaded[lid])
+
+    # ----------------------------------------------------
+    # Course Practice Arena (Decoupled in-memory challenge sets)
+    # ----------------------------------------------------
+    def save_practice_set(self, practice_set: PracticeSet) -> PracticeSet:
+        self.practice_sets[practice_set.practice_id] = practice_set
+        return practice_set
+
+    def get_practice_set(self, practice_id: str) -> Optional[PracticeSet]:
+        return self.practice_sets.get(practice_id)
+
+    def list_practice_sets(self, course_id: Optional[str] = None) -> List[PracticeSet]:
+        if course_id:
+            return [p for p in self.practice_sets.values() if p.course_id == course_id]
+        return list(self.practice_sets.values())

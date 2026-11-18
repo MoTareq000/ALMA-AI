@@ -151,3 +151,29 @@ class AlmaApiClient:
         r = requests.post(f"{self.base_url}/runtime/lessons/{lesson_id}/ask-alma", json=payload, timeout=10)
         r.raise_for_status()
         return r.json()
+
+    # --- Course Practice Challenges & Dynamic Difficulty Arena ---
+    def generate_practice(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate standalone course practice challenge set."""
+        r = requests.post(f"{self.base_url}/practice/generate", json=payload, timeout=30)
+        r.raise_for_status()
+        return r.json()
+
+    def list_practice_sets(self, course_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List all practice challenge sets."""
+        params = {"course_id": course_id} if course_id else {}
+        r = requests.get(f"{self.base_url}/practice", params=params, timeout=5)
+        r.raise_for_status()
+        return r.json()
+
+    def get_practice_set(self, practice_id: str) -> Dict[str, Any]:
+        """Fetch a specific practice set."""
+        r = requests.get(f"{self.base_url}/practice/{practice_id}", timeout=5)
+        r.raise_for_status()
+        return r.json()
+
+    def submit_practice_code(self, practice_id: str, submission: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit code to practice arena for automated verification and dynamic difficulty ladder progression."""
+        r = requests.post(f"{self.base_url}/practice/{practice_id}/submit", json=submission, timeout=5)
+        r.raise_for_status()
+        return r.json()

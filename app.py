@@ -20,13 +20,12 @@ from alma_lessons.domain import (
     Block,
     LessonState,
     LessonSegmentation,
-    Outline,
-    OutlineSection,
     DifficultyLadder,
-    DIFFICULTY_METADATA,
+    PracticeSet,
+    PracticeCreateRequest,
 )
 from alma_lessons.llm import GroqLLMClient, OpenRouterLLMClient, GoogleGeminiLLMClient
-from alma_lessons.generation import LessonGenerationPipeline
+from alma_lessons.generation import LessonGenerationPipeline, CoursePracticeGenerator
 from alma_lessons.validation import ValidationRunner
 from alma_lessons.segmentation import BasicLessonSegmenter
 from alma_lessons.storage import memory_store, LessonSession, student_repository
@@ -410,13 +409,13 @@ with st.sidebar:
 st.markdown('<div class="main-header">ALMA Academy: AI Lesson Generation Pipeline</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Automated, verified, teacher-approved programming lessons with hybrid narration segmentation</div>', unsafe_allow_html=True)
 
-tab_create, tab_review, tab_validation, tab_segments, tab_practice, tab_runtime = st.tabs([
+tab_create, tab_review, tab_validation, tab_segments, tab_runtime, tab_practice = st.tabs([
     "📝 1. Lesson Specification",
     "👀 2. Teacher Review & Edit Workbench",
     "🛡️ 3. Validation Report",
     "🎙️ 4. Narration & Micro-Checks",
-    "🧩 5. Puzzles & Coding Exercises",
-    "🎓 6. Student Adaptive Runtime (Mohamad)"
+    "🎓 5. Student Lesson Player (Tab A)",
+    "🧩 6. Course Practice Arena (Tab B)"
 ])
 
 
@@ -1253,104 +1252,10 @@ with tab_segments:
                         st.write("")
 
 # ----------------------------------------------------
-# TAB 5: PUZZLES & HANDS-ON CODING EXERCISES (Macro)
-# ----------------------------------------------------
-with tab_practice:
-    st.header("Step 5: Interactive Puzzles & Hands-On Coding Challenges")
-    st.markdown("Consolidate conceptual understanding through active puzzle solving, line unscrambling, and hands-on coding.")
-
-    current_session: Optional[LessonSession] = None
-    if st.session_state.selected_lesson_id:
-        current_session = memory_store.lessons.get(st.session_state.selected_lesson_id)
-
-    if not current_session:
-        st.info("Select or generate a lesson first in Step 1.")
-    else:
-        curr_v = current_session.current_version
-        lesson_data = curr_v.content
-
-        # Generate puzzles & exercises on demand if not present
-        if not lesson_data.puzzles and not lesson_data.exercises:
-            st.info("This lesson does not have practice puzzles or coding challenges yet.")
-            if st.button("⚡ Generate Puzzles & Exercises for this Lesson", type="primary"):
-                with st.spinner("Synthesizing logic puzzles and hands-on coding exercises..."):
-                    pipeline = LessonGenerationPipeline(llm_client=client)
-                    outline = Outline(
-                        title=lesson_data.title,
-                        sections=[
-                            OutlineSection(order=s.order, title=s.title, purpose=s.purpose, covers_objectives=s.covers_objectives)
-                            for s in lesson_data.sections
-                        ]
-                    )
-                    puzzles, exercises = pipeline.generate_lesson_practice(current_session.spec, outline, lesson_data.sections)
-                    lesson_data.puzzles = puzzles
-                    lesson_data.exercises = exercises
-                st.success("Puzzles and Coding Exercises generated!")
-                st.rerun()
-
-        # Part 1: Interactive Puzzles
-        if lesson_data.puzzles:
-            st.subheader("🧩 Interactive Puzzles & Logic Tracing")
-            for idx, p in enumerate(lesson_data.puzzles):
-                with st.container():
-                    puzzle_label = p.puzzle_type.replace('_', ' ').title()
-                    st.markdown(f"""
-                    <div class="segment-card" style="border-left: 5px solid #8B5CF6;">
-                        <span style="font-size: 1.1rem; font-weight: 700; color: var(--text-color, inherit);">Puzzle #{idx+1}: {p.title}</span>
-                        <span class="badge" style="background-color: rgba(139, 92, 246, 0.2); color: #8B5CF6; border: 1px solid #8B5CF6;">{puzzle_label}</span><br>
-                        <p style="margin-top: 0.5rem; color: var(--text-color, inherit);">{p.description}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    if p.scrambled_items:
-                        st.caption("🔀 Scrambled Lines (Identify the correct logical order):")
-                        for s_idx, item in enumerate(p.scrambled_items):
-                            st.code(f"[{chr(65+s_idx)}]  {item}", language=lesson_data.programming_language.lower())
-
-                    if p.code_snippet:
-                        st.caption("Code Snippet to Trace:")
-                        st.code(p.code_snippet, language=lesson_data.programming_language.lower())
-
-                    with st.expander(f"🔍 Reveal Solution & Step-by-Step Walkthrough (Puzzle #{idx+1})"):
-                        st.markdown("**Target Answer / Correct Order:**")
-                        st.code(p.correct_order_or_answer, language=lesson_data.programming_language.lower())
-                        st.markdown(f"**Step-by-Step Logic Walkthrough:** {p.explanation}")
-                st.write("")
-
-        st.divider()
-
-        # Part 2: Hands-On Coding Exercises
-        if lesson_data.exercises:
-            st.subheader("💻 Hands-On Coding Challenges")
-            for idx, ex in enumerate(lesson_data.exercises):
-                with st.container():
-                    diff_color = "#10B981" if ex.difficulty == "easy" else ("#F59E0B" if ex.difficulty == "medium" else "#EF4444")
-                    st.markdown(f"""
-                    <div class="segment-card" style="border-left: 5px solid {diff_color};">
-                        <span style="font-size: 1.15rem; font-weight: 700; color: var(--text-color, inherit);">Exercise #{idx+1}: {ex.title}</span>
-                        <span class="badge" style="background-color: {diff_color}22; color: {diff_color}; border: 1px solid {diff_color};">{ex.difficulty.upper()}</span><br>
-                        <p style="margin-top: 0.6rem; font-size: 0.98rem; color: var(--text-color, inherit); line-height: 1.5;">{ex.task_description}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    st.caption(f"Starter Code Scaffold ({lesson_data.programming_language}):")
-                    st.code(ex.starter_code, language=lesson_data.programming_language.lower())
-
-                    if ex.hints:
-                        with st.expander("💡 Hints (Try to solve before peeking!)"):
-                            for h_idx, hint in enumerate(ex.hints):
-                                st.markdown(f"- **Hint {h_idx+1}:** {hint}")
-
-                    with st.expander(f"✅ Reveal Reference Solution & Output (Exercise #{idx+1})"):
-                        st.caption(f"**Expected Output:** `{ex.expected_output}`")
-                        st.code(ex.solution_code, language=lesson_data.programming_language.lower())
-                st.write("")
-
-# ----------------------------------------------------
-# TAB 6: STUDENT INTERACTIVE LEARNING PLAYER
+# TAB 5: STUDENT INTERACTIVE LEARNING PLAYER (Tab A)
 # ----------------------------------------------------
 with tab_runtime:
-    st.header("Step 6: Student Interactive Learning Player")
+    st.header("Step 5: Student Lesson Player (Tab A)")
     st.markdown("""
     Experience how a student attends an interactive, audio-narrated lesson in ALMA.
     Features synchronized teacher voice playback, live slide progression, formative checkpoints, and an inline **Ask ALMA** AI tutor.
@@ -1662,120 +1567,465 @@ with tab_runtime:
             if st.session_state.get("lesson_completed_modal"):
                 st.success(f"🏆 **Outstanding Work, {active_student.first_name}!** You have successfully completed **'{lesson_data.title}'**!")
                 st.info(f"🔥 Your learning streak has reached **{active_student.current_streak} lessons**! Keep up the momentum!")
-                if st.button("Start Next Lesson / Reset"):
-                    st.session_state.student_slide_idx = 0
-                    st.session_state.lesson_completed_modal = False
+                col_fin1, col_fin2 = st.columns([1.5, 1.0])
+                with col_fin1:
+                    if st.button("🎉 Lesson Completed! Jump to Course Practice Arena ➡️", type="primary", use_container_width=True):
+                        st.session_state.practice_topic_prefill = lesson_data.title
+                        st.session_state.practice_lang_prefill = lesson_data.programming_language
+                        st.session_state.student_slide_idx = 0
+                        st.session_state.lesson_completed_modal = False
+                        st.toast("Lesson completed! Click '🧩 6. Course Practice Arena (Tab B)' above to start hands-on challenges!", icon="🚀")
+                with col_fin2:
+                    if st.button("Restart Lesson 🔄", use_container_width=True):
+                        st.session_state.student_slide_idx = 0
+                        st.session_state.lesson_completed_modal = False
+                        st.rerun()
+
+# ----------------------------------------------------
+# TAB 6: COURSE PRACTICE ARENA (Tab B)
+# ----------------------------------------------------
+with tab_practice:
+    st.header("Step 6: Course Practice Arena (Tab B) — The Adaptive Coding Gym")
+    st.markdown("""
+    A dedicated problem-solving hub decoupled from lecture slides.
+    Features interactive logic puzzles, in-browser starter code IDE, and the 3-tiered **Dynamic Difficulty Coding Ladder (🟢 Easy ↔ 🟡 Medium ↔ 🔴 Hard)**.
+    """)
+
+    # Seed initial practice set if memory_store has none
+    if not memory_store.practice_sets:
+        from alma_lessons.domain import PuzzleChallenge, CodingExercise
+        sample_p = PracticeSet(
+            practice_id="prac_loops_default",
+            topic="Python For Loops & Iteration",
+            course_id="cs101",
+            module_id="mod_loops",
+            programming_language="Python",
+            grade_level="Grade 8",
+            concepts_covered=["for loops", "range() function", "accumulators"],
+            puzzles=[
+                PuzzleChallenge(
+                    puzzle_id="puz_1",
+                    puzzle_type="reorder_lines",
+                    title="Sum the First 5 Numbers",
+                    description="Arrange the scrambled lines of Python code in the correct logical sequence to compute and print the sum of numbers 1 to 5.",
+                    scrambled_items=[
+                        "total = 0",
+                        "for i in range(1, 6):",
+                        "    total += i",
+                        "print('Sum:', total)"
+                    ],
+                    correct_order_or_answer="total = 0\nfor i in range(1, 6):\n    total += i\nprint('Sum:', total)",
+                    explanation="First initialize the accumulator variable 'total = 0', then loop with 'range(1, 6)' covering 1 through 5, add each number with 'total += i', and finally print the result outside the loop."
+                ),
+                PuzzleChallenge(
+                    puzzle_id="puz_2",
+                    puzzle_type="code_trace",
+                    title="Trace the Loop Counter",
+                    description="Trace the execution of this loop and determine the exact output printed to the screen.",
+                    code_snippet="count = 1\nfor step in range(3):\n    count = count * 2\nprint(count)",
+                    correct_order_or_answer="8",
+                    explanation="Iteration 0: count becomes 1*2=2. Iteration 1: count becomes 2*2=4. Iteration 2: count becomes 4*2=8. Final output is 8."
+                )
+            ],
+            exercises=[
+                CodingExercise(
+                    exercise_id="ex_easy_1",
+                    difficulty="easy",
+                    title="Print Numbers 1 to 5 (Scaffolded)",
+                    task_description="Complete the starter code by filling in the range parameters to print numbers from 1 to 5, each on a new line.",
+                    starter_code="# TODO: Replace the question marks with start and stop values\nfor num in range(?, ?):\n    print(num)",
+                    expected_output="1\n2\n3\n4\n5",
+                    solution_code="for num in range(1, 6):\n    print(num)",
+                    hints=[
+                        "Remember that range(start, stop) excludes the stop value, so to include 5 you need stop to be 6.",
+                        "Start value should be 1."
+                    ]
+                ),
+                CodingExercise(
+                    exercise_id="ex_med_1",
+                    difficulty="medium",
+                    title="Calculate Total Price of Items",
+                    task_description="Given a list of item prices [12, 45, 8, 23], write a for loop to compute the total sum and print: Total: 88",
+                    starter_code="prices = [12, 45, 8, 23]\ntotal = 0\n# Write your for loop here to add each price to total\n\nprint('Total:', total)",
+                    expected_output="Total: 88",
+                    solution_code="prices = [12, 45, 8, 23]\ntotal = 0\nfor p in prices:\n    total += p\nprint('Total:', total)",
+                    hints=[
+                        "Use 'for p in prices:' to iterate through each price.",
+                        "Inside the loop, use 'total += p' or 'total = total + p'."
+                    ]
+                ),
+                CodingExercise(
+                    exercise_id="ex_hard_1",
+                    difficulty="hard",
+                    title="Filter Even Numbers & Calculate Product",
+                    task_description="Given a list of numbers, iterate through them, find all even numbers, multiply them together to compute the running product, and print the result. If no even numbers, print 0.",
+                    starter_code="numbers = [3, 4, 7, 2, 9, 6]\n# Write code to multiply all even numbers together\n# Even numbers in list: 4, 2, 6 -> 4 * 2 * 6 = 48\n",
+                    expected_output="48",
+                    solution_code="numbers = [3, 4, 7, 2, 9, 6]\nproduct = 1\nfound_even = False\nfor n in numbers:\n    if n % 2 == 0:\n        product *= n\n        found_even = True\nprint(product if found_even else 0)",
+                    hints=[
+                        "Use 'if n % 2 == 0:' to check if a number is even.",
+                        "Initialize product = 1 before the loop."
+                    ]
+                )
+            ]
+        )
+        memory_store.save_practice_set(sample_p)
+
+    # Sync remote practice sets if backend is online
+    if backend_online:
+        try:
+            remote_sets = api_client.list_practice_sets()
+            for r_set in remote_sets:
+                p_obj = PracticeSet.model_validate(r_set)
+                memory_store.save_practice_set(p_obj)
+        except Exception:
+            pass
+
+    all_practice_sets = memory_store.list_practice_sets()
+
+    # Section 1: Practice Set Selector & Teacher Generator
+    col_sel_p, col_gen_p = st.columns([2.0, 1.2])
+
+    with col_sel_p:
+        practice_options = {p.practice_id: f"{p.topic} ({p.programming_language} - {p.grade_level})" for p in all_practice_sets}
+        if "selected_practice_id" not in st.session_state or st.session_state.selected_practice_id not in practice_options:
+            if all_practice_sets:
+                st.session_state.selected_practice_id = all_practice_sets[0].practice_id
+
+        selected_prac_id = st.selectbox(
+            "Select Course Practice Challenge Set",
+            options=list(practice_options.keys()),
+            format_func=lambda pid: practice_options[pid],
+            index=list(practice_options.keys()).index(st.session_state.selected_practice_id) if st.session_state.selected_practice_id in practice_options else 0,
+            key="practice_set_selector"
+        )
+        st.session_state.selected_practice_id = selected_prac_id
+
+    # Teacher Practice Challenge Generator Expander
+    with st.expander("🛠️ Generate New Course Practice Challenges (Teacher Workflow)", expanded=False):
+        st.caption("Generate a standalone bank of interactive logic puzzles and 3-tiered coding exercises (🟢 Easy ↔ 🟡 Medium ↔ 🔴 Hard) decoupled from lessons.")
+
+        default_prac_topic = st.session_state.get("practice_topic_prefill", "Python For Loops & Iteration")
+        default_prac_lang = st.session_state.get("practice_lang_prefill", "Python")
+
+        p_col1, p_col2 = st.columns(2)
+        with p_col1:
+            gen_p_topic = st.text_input("Course Topic for Practice *", value=default_prac_topic, key="gen_p_topic_input")
+            gen_p_lang = st.selectbox(
+                "Programming Language *",
+                ["Python", "JavaScript", "Java", "C++", "C#", "TypeScript", "HTML/CSS", "Other"],
+                index=0 if default_prac_lang == "Python" else 0,
+                key="gen_p_lang_input"
+            )
+            gen_p_grade = st.selectbox(
+                "Target Grade Level *",
+                ["Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12", "Introductory College"],
+                index=2,
+                key="gen_p_grade_input"
+            )
+
+        with p_col2:
+            gen_p_concepts = st.text_area(
+                "Target Concepts to Drill (comma or newline separated)",
+                value="for loops, range() function, accumulators and running totals",
+                key="gen_p_concepts_input"
+            )
+
+        if st.button("⚡ Generate Course Practice Set", type="primary", use_container_width=True, key="btn_generate_practice_set"):
+            if not gen_p_topic.strip():
+                st.error("Please provide a topic.")
+            else:
+                c_list = [c.strip() for c in gen_p_concepts.replace("\n", ",").split(",") if c.strip()]
+                req = PracticeCreateRequest(
+                    topic=gen_p_topic.strip(),
+                    programming_language=gen_p_lang,
+                    grade_level=gen_p_grade,
+                    concepts_to_cover=c_list,
+                    provider="gemini" if "Google" in provider else ("groq" if "Groq" in provider else "openrouter"),
+                    model=generator_model,
+                )
+                with st.spinner(f"Generating puzzles and 3-tiered coding exercises for '{gen_p_topic}'..."):
+                    try:
+                        if backend_online:
+                            res_dict = api_client.generate_practice(req.model_dump())
+                            new_prac = PracticeSet.model_validate(res_dict)
+                        else:
+                            generator = CoursePracticeGenerator(llm_client=client)
+                            new_prac = generator.generate_practice_set(req)
+
+                        memory_store.save_practice_set(new_prac)
+                        st.session_state.selected_practice_id = new_prac.practice_id
+                        st.success(f"🎉 Practice Set for '{new_prac.topic}' generated with {len(new_prac.puzzles)} puzzles and {len(new_prac.exercises)} exercises!")
+                        st.rerun()
+                    except Exception as p_err:
+                        st.error(f"Generation failed: {p_err}")
+
+    st.divider()
+
+    # Active Practice Set View
+    active_practice: Optional[PracticeSet] = memory_store.get_practice_set(st.session_state.selected_practice_id) if st.session_state.selected_practice_id else None
+
+    if not active_practice:
+        st.info("No practice challenge set selected. Choose or generate one above to begin practicing!")
+    else:
+        # Active Student Context for Practice Arena
+        all_students = student_repository.list_students()
+        if not all_students:
+            mohamad_default = student_repository.get_default_student()
+            all_students = [mohamad_default] if mohamad_default else []
+        s_options = {s.student_id: f"{s.first_name} {s.last_name} ({s.grade_level})" for s in all_students}
+
+        prac_stu_col1, prac_stu_col2 = st.columns([1.5, 2.5])
+        with prac_stu_col1:
+            prac_stu_id = st.selectbox(
+                "Practicing Student",
+                options=list(s_options.keys()),
+                format_func=lambda x: s_options[x],
+                index=0,
+                key="prac_stu_selector"
+            )
+        prac_student = student_repository.get_student(prac_stu_id) or all_students[0]
+
+        with prac_stu_col2:
+            prac_archetype = ArchetypeClassifier.classify(prac_student)
+            prac_arch_meta = ARCHETYPES_INFO.get(prac_archetype, ARCHETYPES_INFO["foundational"])
+            st.markdown(f"""
+            <div style="padding-top: 0.5rem;">
+                <span class="badge" style="background-color: {prac_arch_meta['color']}22; color: {prac_arch_meta['color']}; border: 1px solid {prac_arch_meta['color']};">
+                    {prac_arch_meta['badge']}
+                </span>
+                <span style="font-size: 0.85rem; opacity: 0.85;">Adaptive Practice Focus: <b>{prac_arch_meta['focus']}</b></span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="segment-card" style="border-left: 5px solid #3B82F6; margin-bottom: 1.0rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 1.25rem; font-weight: 700; color: var(--text-color, inherit);">🎯 {active_practice.topic}</span>
+                <div>
+                    <span class="badge badge-approved">{active_practice.programming_language}</span>
+                    <span class="badge" style="background-color: rgba(59, 130, 246, 0.15); color: #3B82F6; border: 1px solid #3B82F6;">{active_practice.grade_level}</span>
+                </div>
+            </div>
+            <span style="font-size: 0.85rem; opacity: 0.85;">Concepts: <b>{', '.join(active_practice.concepts_covered) if active_practice.concepts_covered else active_practice.topic}</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Part 1: Interactive Logic Puzzles (Warm-Up)
+        if active_practice.puzzles:
+            st.subheader("🧩 Part 1: Interactive Logic Puzzles & Code Tracing (Warm-Up)")
+            st.caption("Sharpen conceptual understanding and spot patterns before writing complete programs.")
+
+            for idx, p in enumerate(active_practice.puzzles):
+                with st.container():
+                    p_type_label = p.puzzle_type.replace('_', ' ').title()
+                    st.markdown(f"""
+                    <div class="segment-card" style="border-left: 4px solid #8B5CF6;">
+                        <span style="font-size: 1.05rem; font-weight: 700; color: var(--text-color, inherit);">Puzzle #{idx+1}: {p.title}</span>
+                        <span class="badge" style="background-color: rgba(139, 92, 246, 0.2); color: #8B5CF6; border: 1px solid #8B5CF6;">{p_type_label}</span><br>
+                        <p style="margin-top: 0.5rem; color: var(--text-color, inherit); font-size: 0.95rem;">{p.description}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    if p.scrambled_items:
+                        st.caption("🔀 Scrambled Lines (Identify the correct logical order):")
+                        for s_idx, item in enumerate(p.scrambled_items):
+                            st.code(f"[{chr(65+s_idx)}]  {item}", language=active_practice.programming_language.lower())
+
+                    if p.code_snippet:
+                        st.caption(f"Code Snippet to Trace ({active_practice.programming_language}):")
+                        st.code(p.code_snippet, language=active_practice.programming_language.lower())
+
+                    with st.expander(f"🔍 Reveal Solution & Step-by-Step Logic (Puzzle #{idx+1})"):
+                        st.markdown("**Correct Order / Target Output:**")
+                        st.code(p.correct_order_or_answer, language=active_practice.programming_language.lower())
+                        st.markdown(f"**Step-by-Step Explanation:** {p.explanation}")
+                st.write("")
+
+        st.divider()
+
+        # Part 2: Adaptive Coding Gym (Dynamic Difficulty Ladder)
+        st.subheader("💻 Part 2: Dynamic Difficulty Coding Practice Ladder (The Coding Gym)")
+        st.markdown("""
+        Practice with real-time adaptive difficulty progression:
+        Solve the exercise correctly to step up the ladder (`🟢 Easy ➔ 🟡 Medium ➔ 🔴 Hard`).
+        If you get stuck, request scaffolded hints or step down for guided assistance.
+        """)
+
+        # Student current difficulty in session state
+        diff_state_key = f"ladder_diff_{active_practice.practice_id}_{prac_student.student_id}"
+        if diff_state_key not in st.session_state:
+            # Initialize by archetype
+            if prac_archetype == "foundational":
+                st.session_state[diff_state_key] = "easy"
+            elif prac_archetype == "fast_learner":
+                st.session_state[diff_state_key] = "medium"
+            else:
+                st.session_state[diff_state_key] = "medium"
+
+        current_diff = st.session_state[diff_state_key]
+        hints_key = f"hints_unlocked_{active_practice.practice_id}_{prac_student.student_id}_{current_diff}"
+        if hints_key not in st.session_state:
+            st.session_state[hints_key] = 0
+
+        # Visual Difficulty Ladder Bar
+        c_ladder1, c_ladder2, c_ladder3 = st.columns(3)
+        with c_ladder1:
+            is_active = (current_diff == "easy")
+            border = "3px solid #10B981" if is_active else "1px solid rgba(16, 185, 129, 0.3)"
+            bg = "rgba(16, 185, 129, 0.15)" if is_active else "rgba(16, 185, 129, 0.04)"
+            st.markdown(f"""
+            <div style="border: {border}; background-color: {bg}; border-radius: 8px; padding: 0.7rem; text-align: center;">
+                <span style="font-weight: 700; color: #10B981;">🟢 Tier 1: Easy</span><br>
+                <span style="font-size: 0.8rem; opacity: 0.85;">Scaffolded & Fill-in (+10 XP)</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c_ladder2:
+            is_active = (current_diff == "medium")
+            border = "3px solid #F59E0B" if is_active else "1px solid rgba(245, 158, 11, 0.3)"
+            bg = "rgba(245, 158, 11, 0.15)" if is_active else "rgba(245, 158, 11, 0.04)"
+            st.markdown(f"""
+            <div style="border: {border}; background-color: {bg}; border-radius: 8px; padding: 0.7rem; text-align: center;">
+                <span style="font-weight: 700; color: #F59E0B;">🟡 Tier 2: Medium</span><br>
+                <span style="font-size: 0.8rem; opacity: 0.85;">Standard Challenge (+25 XP)</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c_ladder3:
+            is_active = (current_diff == "hard")
+            border = "3px solid #EF4444" if is_active else "1px solid rgba(239, 68, 68, 0.3)"
+            bg = "rgba(239, 68, 68, 0.15)" if is_active else "rgba(239, 68, 68, 0.04)"
+            st.markdown(f"""
+            <div style="border: {border}; background-color: {bg}; border-radius: 8px; padding: 0.7rem; text-align: center;">
+                <span style="font-weight: 700; color: #EF4444;">🔴 Tier 3: Hard</span><br>
+                <span style="font-size: 0.8rem; opacity: 0.85;">Algorithmic / Open (+50 XP)</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.write("")
+
+        # Match active exercise for current difficulty
+        matched_exercise = DifficultyLadder.get_exercise_for_level(active_practice.exercises, current_diff)
+
+        if not matched_exercise:
+            # Fallback to any exercise
+            matched_exercise = active_practice.exercises[0] if active_practice.exercises else None
+
+        if matched_exercise:
+            diff_color = "#10B981" if matched_exercise.difficulty == "easy" else ("#F59E0B" if matched_exercise.difficulty == "medium" else "#EF4444")
+            st.markdown(f"""
+            <div class="segment-card" style="border-left: 5px solid {diff_color}; padding: 1.2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <span style="font-size: 1.2rem; font-weight: 700; color: var(--text-color, inherit);">💻 Active Challenge: {matched_exercise.title}</span>
+                    <span class="badge" style="background-color: {diff_color}22; color: {diff_color}; border: 1px solid {diff_color}; font-size: 0.9rem;">
+                        {matched_exercise.difficulty.upper()} LEVEL
+                    </span>
+                </div>
+                <p style="margin-top: 0.8rem; font-size: 1.05rem; line-height: 1.5; color: var(--text-color, inherit);">
+                    {matched_exercise.task_description}
+                </p>
+                <span style="font-size: 0.85rem; opacity: 0.85;">Expected Output: <code>{matched_exercise.expected_output}</code></span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # In-browser Code IDE
+            editor_key = f"code_input_{active_practice.practice_id}_{matched_exercise.exercise_id}_{current_diff}"
+            if editor_key not in st.session_state:
+                st.session_state[editor_key] = matched_exercise.starter_code
+
+            student_code_solution = st.text_area(
+                f"Your Code Solution ({active_practice.programming_language}):",
+                value=st.session_state[editor_key],
+                height=220,
+                key=editor_key
+            )
+
+            # Action Buttons Row
+            btn_col1, btn_col2, btn_col3, btn_col4 = st.columns([1.5, 1.2, 1.2, 1.2])
+
+            with btn_col1:
+                if st.button("▶️ Submit Code & Test", type="primary", use_container_width=True, key=f"btn_eval_{matched_exercise.exercise_id}"):
+                    with st.spinner("Evaluating code solution..."):
+                        sub_payload = {
+                            "student_id": prac_student.student_id,
+                            "current_difficulty": current_diff,
+                            "submitted_code": student_code_solution,
+                            "hints_used": st.session_state[hints_key],
+                        }
+                        if backend_online:
+                            try:
+                                eval_res = api_client.submit_practice_code(active_practice.practice_id, sub_payload)
+                            except Exception:
+                                # In-process fallback
+                                is_mod = (student_code_solution.strip() != matched_exercise.starter_code.strip() and len(student_code_solution.strip()) > 15)
+                                has_subs = len(student_code_solution.strip().split("\n")) >= 2
+                                is_corr = is_mod and has_subs
+                                next_lvl = DifficultyLadder.promote(current_diff) if is_corr else DifficultyLadder.demote(current_diff)
+                                eval_res = {
+                                    "status": "correct" if is_corr else "needs_work",
+                                    "new_difficulty": next_lvl,
+                                    "ladder_action": "promoted" if is_corr and next_lvl != current_diff else ("max_mastery" if is_corr else "demoted"),
+                                    "feedback": f"Outstanding work! Solved at {current_diff.upper()} level." if is_corr else "Solution needs refinement.",
+                                }
+                        else:
+                            is_mod = (student_code_solution.strip() != matched_exercise.starter_code.strip() and len(student_code_solution.strip()) > 15)
+                            has_subs = len(student_code_solution.strip().split("\n")) >= 2
+                            is_corr = is_mod and has_subs
+                            next_lvl = DifficultyLadder.promote(current_diff) if is_corr else DifficultyLadder.demote(current_diff)
+                            eval_res = {
+                                "status": "correct" if is_corr else "needs_work",
+                                "new_difficulty": next_lvl,
+                                "ladder_action": "promoted" if is_corr and next_lvl != current_diff else ("max_mastery" if is_corr else "demoted"),
+                                "feedback": f"Outstanding work! Solved at {current_diff.upper()} level." if is_corr else "Solution needs refinement.",
+                            }
+
+                        if eval_res.get("status") == "correct":
+                            st.balloons()
+                            new_diff = eval_res.get("new_difficulty", current_diff)
+                            if new_diff != current_diff:
+                                st.session_state[diff_state_key] = new_diff
+                                st.success(f"🎉 **Brilliant, {prac_student.first_name}!** {eval_res.get('feedback')}\n\n🚀 **Difficulty Promoted:** Stepping up to **{new_diff.upper()}** challenge!")
+                            else:
+                                st.success(f"🏆 **Maximum Mastery Achieved!** You have conquered the {current_diff.upper()} tier for this topic!")
+                            prac_student.current_streak += 1
+                            st.rerun()
+                        else:
+                            st.warning(f"⚠️ **Keep Going, {prac_student.first_name}!** {eval_res.get('feedback')}\n\nMake sure your code implements the required task logic and check the hints below.")
+
+            with btn_col2:
+                if st.button("💡 Need a Hint", use_container_width=True, key=f"btn_hint_{matched_exercise.exercise_id}"):
+                    if matched_exercise.hints:
+                        st.session_state[hints_key] = min(st.session_state[hints_key] + 1, len(matched_exercise.hints))
+                        st.rerun()
+                    else:
+                        st.info("No hints recorded for this challenge.")
+
+            with btn_col3:
+                can_step_down = (current_diff != "easy")
+                if st.button("🔄 Step Down", disabled=not can_step_down, use_container_width=True, key=f"btn_demote_{matched_exercise.exercise_id}"):
+                    st.session_state[diff_state_key] = DifficultyLadder.demote(current_diff)
                     st.rerun()
 
-            # 7. Adaptive Coding Practice with Dynamic Difficulty Ladder
-            if lesson_data.exercises:
-                st.divider()
-                st.subheader("🧩 Adaptive Coding Practice (Dynamic Difficulty Ladder)")
-                st.caption("Practice exercises automatically adapt to your performance in real-time: solve correctly to level up, or receive guided scaffolding when stuck.")
+            with btn_col4:
+                can_step_up = (current_diff != "hard")
+                if st.button("🚀 Step Up", disabled=not can_step_up, use_container_width=True, key=f"btn_promote_{matched_exercise.exercise_id}"):
+                    st.session_state[diff_state_key] = DifficultyLadder.promote(current_diff)
+                    st.rerun()
 
-                ladder_state_key = f"ladder_lvl_{active_student.student_id}_{current_session.lesson_id}"
-                if ladder_state_key not in st.session_state:
-                    # Initialize starting level based on archetype recommendation
-                    st.session_state[ladder_state_key] = arch_meta.get("recommended_starting_difficulty", "medium")
+            # Display Unlocked Hints
+            unlocked_count = st.session_state.get(hints_key, 0)
+            if unlocked_count > 0 and matched_exercise.hints:
+                st.markdown("##### 💡 Unlocked Scaffolding Hints:")
+                for h_i in range(unlocked_count):
+                    st.info(f"**Hint {h_i+1}:** {matched_exercise.hints[h_i]}")
 
-                current_level = st.session_state[ladder_state_key]
-                cur_meta = DIFFICULTY_METADATA.get(current_level, DIFFICULTY_METADATA["medium"])
+            # Solution & Output Expander
+            with st.expander(f"✅ Reveal Reference Solution & Output ({matched_exercise.title})"):
+                st.caption(f"**Expected Output:** `{matched_exercise.expected_output}`")
+                st.code(matched_exercise.solution_code, language=active_practice.programming_language.lower())
+        else:
+            st.info("No coding exercises found in this practice set.")
 
-                # Visual Difficulty Ladder Gauge
-                col_g1, col_g2, col_g3 = st.columns(3)
-                with col_g1:
-                    is_active = (current_level == "easy")
-                    border = "3px solid #10B981" if is_active else "1px solid rgba(128,128,128,0.2)"
-                    bg = "rgba(16, 185, 129, 0.15)" if is_active else "rgba(128,128,128,0.04)"
-                    st.markdown(f"""
-                    <div style="border: {border}; background: {bg}; border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center;">
-                        <span style="font-weight: 700; color: #10B981;">🟢 1. Easy (Warmup)</span><br>
-                        <span style="font-size: 0.75rem; opacity: 0.8;">Guided fill-in code</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_g2:
-                    is_active = (current_level == "medium")
-                    border = "3px solid #F59E0B" if is_active else "1px solid rgba(128,128,128,0.2)"
-                    bg = "rgba(245, 158, 11, 0.15)" if is_active else "rgba(128,128,128,0.04)"
-                    st.markdown(f"""
-                    <div style="border: {border}; background: {bg}; border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center;">
-                        <span style="font-weight: 700; color: #F59E0B;">🟡 2. Medium (Core)</span><br>
-                        <span style="font-size: 0.75rem; opacity: 0.8;">Standard scenario</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_g3:
-                    is_active = (current_level == "hard")
-                    border = "3px solid #EF4444" if is_active else "1px solid rgba(128,128,128,0.2)"
-                    bg = "rgba(239, 68, 68, 0.15)" if is_active else "rgba(128,128,128,0.04)"
-                    st.markdown(f"""
-                    <div style="border: {border}; background: {bg}; border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center;">
-                        <span style="font-weight: 700; color: #EF4444;">🔴 3. Hard (Mastery)</span><br>
-                        <span style="font-size: 0.75rem; opacity: 0.8;">Edge case challenge</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                st.write("")
-                # Retrieve active exercise for this level
-                matched_exercise = DifficultyLadder.get_exercise_for_level(lesson_data.exercises, current_level)
-                if matched_exercise:
-                    st.markdown(f"""
-                    <div class="segment-card" style="border-left: 5px solid {cur_meta['color']}; margin-top: 0.5rem;">
-                        <span style="font-size: 1.15rem; font-weight: 700;">Challenge: {matched_exercise.title}</span>
-                        <span class="badge" style="background-color: {cur_meta['color']}22; color: {cur_meta['color']}; border: 1px solid {cur_meta['color']};">{cur_meta['name'].upper()}</span><br>
-                        <p style="margin-top: 0.5rem; font-size: 1.0rem; line-height: 1.5;">{matched_exercise.task_description}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    st.markdown(f"**💻 Starter Code ({lesson_data.programming_language}):**")
-                    stu_code_input = st.text_area(
-                        "Your Code Solution:",
-                        value=matched_exercise.starter_code,
-                        height=160,
-                        key=f"stu_code_{current_level}_{current_session.lesson_id}"
-                    )
-
-                    hint_count_key = f"hints_shown_{active_student.student_id}_{current_level}"
-                    if hint_count_key not in st.session_state:
-                        st.session_state[hint_count_key] = 0
-
-                    c_act1, c_act2, c_act3 = st.columns([1.5, 1.2, 2.0])
-                    with c_act1:
-                        if st.button("▶️ Submit Code & Test", type="primary", key=f"sub_code_{current_level}"):
-                            is_solved = (stu_code_input.strip() != matched_exercise.starter_code.strip() and len(stu_code_input.strip()) > 15)
-                            if is_solved:
-                                st.success(f"🎉 **Brilliant execution, {active_student.first_name}!**")
-                                if current_level == "hard":
-                                    st.balloons()
-                                    st.info("🏆 **Maximum Mastery Level Achieved on this Lesson!**")
-                                else:
-                                    next_lvl = DifficultyLadder.promote(current_level)
-                                    st.session_state[ladder_state_key] = next_lvl
-                                    st.success(f"📈 **Level UP! Moving from {current_level.upper()} ➡️ {next_lvl.upper()}!**")
-                                    st.rerun()
-                            else:
-                                st.warning("⚠️ Code appears unchanged or incomplete. Try completing the scaffold or click 'Need a Hint'.")
-
-                    with c_act2:
-                        if matched_exercise.hints:
-                            if st.button("💡 Need a Hint?", key=f"btn_hint_{current_level}"):
-                                st.session_state[hint_count_key] = min(st.session_state[hint_count_key] + 1, len(matched_exercise.hints))
-
-                    with c_act3:
-                        if current_level != "easy":
-                            if st.button("🔄 Step Down (Need Warmup)", key=f"btn_demote_{current_level}"):
-                                prev_lvl = DifficultyLadder.demote(current_level)
-                                st.session_state[ladder_state_key] = prev_lvl
-                                st.info(f"📉 Stepped down to {prev_lvl.upper()} to reinforce the basics first.")
-                                st.rerun()
-
-                    # Render revealed hints if requested
-                    hints_to_show = st.session_state.get(hint_count_key, 0)
-                    if hints_to_show > 0:
-                        for h_i in range(hints_to_show):
-                            st.info(f"💡 **Hint {h_i+1}:** {matched_exercise.hints[h_i]}")
-
-                    with st.expander("📖 View Expected Output & Reference Solution (Self-Check)"):
-                        st.caption(f"**Expected Output:** `{matched_exercise.expected_output}`")
-                        st.code(matched_exercise.solution_code, language=lesson_data.programming_language.lower())
 
 
